@@ -6,9 +6,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import io.github.tychomagnetic.metterweather.data.model.CurrentWeather
 import io.github.tychomagnetic.metterweather.ui.theme.BentoCanvas
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 
 @Composable
 fun WeatherBackground(
@@ -23,7 +23,7 @@ fun WeatherBackground(
                 Brush.verticalGradient(
                     colors = listOf(
                         BentoCanvas,
-                        Color(0xFFF3EDF7)
+                        BentoTile
                     )
                 )
             )
@@ -31,4 +31,3 @@ fun WeatherBackground(
         content()
     }
 }
-

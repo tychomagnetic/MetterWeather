@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import io.github.tychomagnetic.metterweather.data.model.LocationItem
 import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
+import io.github.tychomagnetic.metterweather.ui.theme.BentoOnPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
@@ -140,7 +141,7 @@ fun WidgetLocationPickerDialog(
                                     Icon(
                                         imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Default.LocationOn,
                                         contentDescription = null,
-                                        tint = if (isSelected) Color.White else BentoPurplePrimary,
+                                        tint = if (isSelected) BentoOnPrimary else BentoPurplePrimary,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }

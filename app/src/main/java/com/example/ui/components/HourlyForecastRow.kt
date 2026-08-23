@@ -53,6 +53,7 @@ import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
 import io.github.tychomagnetic.metterweather.ui.theme.BentoCardWhite
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoOnPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
@@ -338,7 +339,7 @@ fun HourlyForecastRow(
                                     text = dayItem.dayOfWeek,
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                        color = if (isSelected) Color.White else BentoTextPrimary,
+                                        color = if (isSelected) BentoOnPrimary else BentoTextPrimary,
                                         fontSize = 11.5.sp
                                     ),
                                     maxLines = 1
@@ -359,7 +360,7 @@ fun HourlyForecastRow(
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = FontWeight.Medium,
                                             color = if (isSelected) {
-                                                Color.White.copy(alpha = 0.9f)
+                                                BentoOnPrimary.copy(alpha = 0.9f)
                                             } else {
                                                 BentoTextSecondary
                                             },
@@ -541,16 +542,17 @@ fun HourlyItemCard(
                     imageVector = Icons.Default.WaterDrop,
                     contentDescription = "Precipitation chance: ${item.precipitationChance}%",
                     tint = precipColor,
-                    modifier = Modifier.size(10.dp)
+                    modifier = Modifier.size(12.dp)
                 )
                 Spacer(modifier = Modifier.width(1.5.dp))
                 Text(
                     text = "${item.precipitationChance}%",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 9.5.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = if (isHighPrecip) FontWeight.Bold else FontWeight.SemiBold,
                         color = precipColor
-                    )
+                    ),
+                    maxLines = 1
                 )
             }
 
@@ -566,14 +568,14 @@ fun HourlyItemCard(
                     contentDescription = "Wind direction: ${item.windDirectionDegrees}° (${item.windDirectionCompass})",
                     tint = if (isNow) BentoHeroText.copy(alpha = 0.85f) else BentoPurplePrimary,
                     modifier = Modifier
-                        .size(9.5.dp)
+                        .size(11.5.dp)
                         .rotate((item.windDirectionDegrees + 180f) % 360f)
                 )
                 Spacer(modifier = Modifier.width(2.dp))
                 Text(
                     text = windUnit.format(item.windSpeedMph),
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 9.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = if (isNow) BentoHeroText.copy(alpha = 0.85f) else BentoTextSecondary
                     ),

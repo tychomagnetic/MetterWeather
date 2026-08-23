@@ -8,10 +8,15 @@ import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.SideEffect
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.Modifier
 import io.github.tychomagnetic.metterweather.ui.WeatherScreen
 import io.github.tychomagnetic.metterweather.ui.WeatherViewModel
 import io.github.tychomagnetic.metterweather.ui.theme.MetOfficeWeatherTheme
+import io.github.tychomagnetic.metterweather.ui.theme.MetterTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -26,7 +31,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MetOfficeWeatherTheme {
+            val uiState by weatherViewModel.uiState.collectAsStateWithLifecycle()
+            MetOfficeWeatherTheme(themeMode = uiState.themeMode) {
+                val isDark = MetterTheme.isDark
+                SideEffect {
+                    WindowCompat.getInsetsController(window, window.decorView).apply {
+                        isAppearanceLightStatusBars = !isDark
+                        isAppearanceLightNavigationBars = !isDark
+                    }
+                }
                 Surface(modifier = Modifier.fillMaxSize()) {
                     WeatherScreen(viewModel = weatherViewModel)
                 }

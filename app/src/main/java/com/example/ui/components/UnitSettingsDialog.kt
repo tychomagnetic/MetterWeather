@@ -33,6 +33,7 @@ import io.github.tychomagnetic.metterweather.data.model.PressureUnit
 import io.github.tychomagnetic.metterweather.data.model.TemperatureUnit
 import io.github.tychomagnetic.metterweather.data.model.WindSpeedUnit
 import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
+import io.github.tychomagnetic.metterweather.ui.theme.BentoOnPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
@@ -154,7 +155,7 @@ fun UnitSettingsDialog(
                 onClick = onDismiss,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BentoPurplePrimary,
-                    contentColor = Color.White
+                    contentColor = BentoOnPrimary
                 ),
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -192,4 +193,3 @@ fun UnitOptionRow(
         )
     }
 }
-

@@ -13,8 +13,8 @@ android {
     applicationId = "io.github.tychomagnetic.metterweather"
     minSdk = 26
     targetSdk = 36
-    versionCode = 7
-    versionName = "0.7"
+    versionCode = 75
+    versionName = "0.75"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

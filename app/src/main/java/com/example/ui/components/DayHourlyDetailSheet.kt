@@ -81,6 +81,7 @@ import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
 import io.github.tychomagnetic.metterweather.ui.theme.BentoCardWhite
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoOnPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
@@ -292,7 +293,7 @@ fun DayHourlyDetailSheet(
                                             text = label,
                                             style = MaterialTheme.typography.labelMedium.copy(
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                color = if (isSelected) Color.White else BentoTextPrimary
+                                                color = if (isSelected) BentoOnPrimary else BentoTextPrimary
                                             )
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -300,7 +301,7 @@ fun DayHourlyDetailSheet(
                                             text = "${tempUnit.convert(item.maxTempCelsius).toInt()}°",
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isSelected) Color.White.copy(alpha = 0.85f) else BentoTextSecondary
+                                                color = if (isSelected) BentoOnPrimary.copy(alpha = 0.85f) else BentoTextSecondary
                                             )
                                         )
                                     }
@@ -623,7 +624,7 @@ fun DayHourlyDetailSheet(
                                     // Rain %
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.width(46.dp)
+                                        modifier = Modifier.width(54.dp)
                                     ) {
                                         if (item.precipitationChance > 0) {
                                             val isHighPrecip = item.precipitationChance > 30
@@ -632,15 +633,17 @@ fun DayHourlyDetailSheet(
                                                 imageVector = Icons.Default.WaterDrop,
                                                 contentDescription = null,
                                                 tint = precipColor,
-                                                modifier = Modifier.size(12.dp)
+                                                modifier = Modifier.size(14.5.dp)
                                             )
                                             Spacer(modifier = Modifier.width(2.dp))
                                             Text(
                                                 text = "${item.precipitationChance}%",
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     color = precipColor,
+                                                    fontSize = 13.sp,
                                                     fontWeight = if (isHighPrecip) FontWeight.Bold else FontWeight.Medium
-                                                )
+                                                ),
+                                                maxLines = 1
                                             )
                                         }
                                     }
@@ -655,7 +658,7 @@ fun DayHourlyDetailSheet(
                                             contentDescription = "Wind: ${item.windDirectionDegrees}° (${item.windDirectionCompass})",
                                             tint = BentoPurplePrimary,
                                             modifier = Modifier
-                                                .size(11.dp)
+                                                .size(13.dp)
                                                 .rotate((item.windDirectionDegrees + 180f) % 360f)
                                         )
                                         Spacer(modifier = Modifier.width(3.dp))
@@ -663,9 +666,10 @@ fun DayHourlyDetailSheet(
                                             text = windUnit.format(item.windSpeedMph),
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 color = BentoTextSecondary,
-                                                fontSize = 11.sp,
+                                                fontSize = 13.sp,
                                                 fontWeight = FontWeight.Medium
-                                            )
+                                            ),
+                                            maxLines = 1
                                         )
                                     }
 

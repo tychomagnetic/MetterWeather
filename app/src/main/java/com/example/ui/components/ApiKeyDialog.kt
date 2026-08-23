@@ -64,9 +64,16 @@ import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
 import io.github.tychomagnetic.metterweather.ui.theme.BentoCardWhite
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoOnPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorBorder
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContent
+import io.github.tychomagnetic.metterweather.ui.theme.MetterSuccessBorder
+import io.github.tychomagnetic.metterweather.ui.theme.MetterSuccessContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterSuccessContent
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 
 @Composable
@@ -238,7 +245,7 @@ fun ApiKeyDialog(
                                 secretInput = ""
                             }
                         ) {
-                            Text("Clear", color = Color(0xFFD32F2F))
+                            Text("Clear", color = MetterErrorContent)
                         }
                     }
                 }
@@ -250,8 +257,8 @@ fun ApiKeyDialog(
                         is ApiKeyTestResult.Success -> {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = Color(0xFFE8F5E9),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA5D6A7)),
+                                color = MetterSuccessContainer,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MetterSuccessBorder),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -261,14 +268,14 @@ fun ApiKeyDialog(
                                     Icon(
                                         imageVector = Icons.Default.CheckCircle,
                                         contentDescription = null,
-                                        tint = Color(0xFF2E7D32),
+                                        tint = MetterSuccessContent,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = "Success! Met Office API verified.",
                                         style = MaterialTheme.typography.bodySmall.copy(
-                                            color = Color(0xFF1B5E20),
+                                            color = MetterSuccessContent,
                                             fontWeight = FontWeight.Medium
                                         )
                                     )
@@ -278,8 +285,8 @@ fun ApiKeyDialog(
                         is ApiKeyTestResult.Error -> {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = Color(0xFFFFEBEE),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFCDD2)),
+                                color = MetterErrorContainer,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MetterErrorBorder),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -289,14 +296,14 @@ fun ApiKeyDialog(
                                     Icon(
                                         imageVector = Icons.Default.Error,
                                         contentDescription = null,
-                                        tint = Color(0xFFD32F2F),
+                                        tint = MetterErrorContent,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = testResult.message,
                                         style = MaterialTheme.typography.bodySmall.copy(
-                                            color = Color(0xFFB71C1C)
+                                            color = MetterErrorContent
                                         )
                                     )
                                 }
@@ -377,7 +384,7 @@ fun ApiKeyDialog(
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BentoPurplePrimary,
-                    contentColor = Color.White
+                    contentColor = BentoOnPrimary
                 ),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.testTag("save_api_key_button")
@@ -397,4 +404,3 @@ fun ApiKeyDialog(
         }
     )
 }
-

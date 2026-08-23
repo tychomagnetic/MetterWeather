@@ -103,6 +103,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.tychomagnetic.metterweather.data.model.PressureUnit
 import io.github.tychomagnetic.metterweather.data.model.ForecastSource
 import io.github.tychomagnetic.metterweather.data.model.TemperatureUnit
+import io.github.tychomagnetic.metterweather.data.model.ThemeMode
 import io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval
 import io.github.tychomagnetic.metterweather.data.model.WindSpeedUnit
 import io.github.tychomagnetic.metterweather.data.repository.ApiKeyTestResult
@@ -110,11 +111,26 @@ import io.github.tychomagnetic.metterweather.ui.components.ApiDebugSheet
 import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoOnPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPillAccent
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorBorder
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContent
+import io.github.tychomagnetic.metterweather.ui.theme.MetterFieldContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterInfoContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterInfoContent
+import io.github.tychomagnetic.metterweather.ui.theme.MetterOnInfo
+import io.github.tychomagnetic.metterweather.ui.theme.MetterOnSuccess
+import io.github.tychomagnetic.metterweather.ui.theme.MetterSuccessBorder
+import io.github.tychomagnetic.metterweather.ui.theme.MetterSuccessContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterSuccessContent
+import io.github.tychomagnetic.metterweather.ui.theme.MetterWarningBorder
+import io.github.tychomagnetic.metterweather.ui.theme.MetterWarningContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterWarningContent
 import io.github.tychomagnetic.metterweather.widget.WidgetLocationHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -230,7 +246,7 @@ fun SettingsScreen(
                         viewModel.selectForecastSource(ForecastSource.MET_OFFICE_SPOT)
                     },
                     shape = RoundedCornerShape(16.dp),
-                    color = if (uiState.forecastSource == ForecastSource.MET_OFFICE_SPOT) Color(0xFFEDE7F6) else Color.Transparent,
+                    color = if (uiState.forecastSource == ForecastSource.MET_OFFICE_SPOT) BentoPillAccent.copy(alpha = 0.55f) else Color.Transparent,
                     border = androidx.compose.foundation.BorderStroke(
                         1.5.dp,
                         if (uiState.forecastSource == ForecastSource.MET_OFFICE_SPOT) BentoPurplePrimary else BentoBorder.copy(alpha = 0.6f)
@@ -245,13 +261,13 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(if (uiState.forecastSource == ForecastSource.MET_OFFICE_SPOT) BentoPurplePrimary else Color(0xFFE2E8F0)),
+                                .background(if (uiState.forecastSource == ForecastSource.MET_OFFICE_SPOT) BentoPurplePrimary else BentoBorder.copy(alpha = 0.45f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Cloud,
                                 contentDescription = null,
-                                tint = if (uiState.forecastSource == ForecastSource.MET_OFFICE_SPOT) Color.White else BentoTextSecondary,
+                                tint = if (uiState.forecastSource == ForecastSource.MET_OFFICE_SPOT) BentoOnPrimary else BentoTextSecondary,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -266,13 +282,13 @@ fun SettingsScreen(
                             )
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = if (hasApiKey) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+                                color = if (hasApiKey) MetterSuccessContainer else MetterWarningContainer,
                                 modifier = Modifier.padding(vertical = 3.dp)
                             ) {
                                 Text(
                                     text = if (hasApiKey) "API key configured" else "API key required",
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        color = if (hasApiKey) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                        color = if (hasApiKey) MetterSuccessContent else MetterWarningContent,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 10.sp
                                     ),
@@ -295,10 +311,10 @@ fun SettingsScreen(
                 Surface(
                     onClick = { viewModel.selectForecastSource(ForecastSource.MET_OFFICE_BPF) },
                     shape = RoundedCornerShape(16.dp),
-                    color = if (uiState.forecastSource == ForecastSource.MET_OFFICE_BPF) Color(0xFFE8F5E9) else Color.Transparent,
+                    color = if (uiState.forecastSource == ForecastSource.MET_OFFICE_BPF) MetterSuccessContainer else Color.Transparent,
                     border = androidx.compose.foundation.BorderStroke(
                         1.5.dp,
-                        if (uiState.forecastSource == ForecastSource.MET_OFFICE_BPF) Color(0xFF2E7D32) else BentoBorder.copy(alpha = 0.6f)
+                        if (uiState.forecastSource == ForecastSource.MET_OFFICE_BPF) MetterSuccessContent else BentoBorder.copy(alpha = 0.6f)
                     ),
                     modifier = Modifier.fillMaxWidth().testTag("source_met_office_bpf_option")
                 ) {
@@ -310,13 +326,13 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(if (uiState.forecastSource == ForecastSource.MET_OFFICE_BPF) Color(0xFF2E7D32) else Color(0xFFE2E8F0)),
+                                .background(if (uiState.forecastSource == ForecastSource.MET_OFFICE_BPF) MetterSuccessContent else BentoBorder.copy(alpha = 0.45f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.DataObject,
                                 contentDescription = null,
-                                tint = if (uiState.forecastSource == ForecastSource.MET_OFFICE_BPF) Color.White else BentoTextSecondary,
+                                tint = if (uiState.forecastSource == ForecastSource.MET_OFFICE_BPF) MetterOnSuccess else BentoTextSecondary,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -329,7 +345,7 @@ fun SettingsScreen(
                             Text(
                                 text = if (hasBpfApiKey) "API key configured" else "API key required",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = if (hasBpfApiKey) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                    color = if (hasBpfApiKey) MetterSuccessContent else MetterWarningContent,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 10.sp
                                 ),
@@ -351,10 +367,10 @@ fun SettingsScreen(
                         viewModel.selectForecastSource(ForecastSource.OPEN_METEO)
                     },
                     shape = RoundedCornerShape(16.dp),
-                    color = if (uiState.forecastSource == ForecastSource.OPEN_METEO) Color(0xFFE0F2FE) else Color.Transparent,
+                    color = if (uiState.forecastSource == ForecastSource.OPEN_METEO) MetterInfoContainer else Color.Transparent,
                     border = androidx.compose.foundation.BorderStroke(
                         1.5.dp,
-                        if (uiState.forecastSource == ForecastSource.OPEN_METEO) Color(0xFF0284C7) else BentoBorder.copy(alpha = 0.6f)
+                        if (uiState.forecastSource == ForecastSource.OPEN_METEO) MetterInfoContent else BentoBorder.copy(alpha = 0.6f)
                     ),
                     modifier = Modifier.fillMaxWidth().testTag("source_open_data_option")
                 ) {
@@ -366,13 +382,13 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(if (uiState.forecastSource == ForecastSource.OPEN_METEO) Color(0xFF0284C7) else Color(0xFFE2E8F0)),
+                                .background(if (uiState.forecastSource == ForecastSource.OPEN_METEO) MetterInfoContent else BentoBorder.copy(alpha = 0.45f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Public,
                                 contentDescription = null,
-                                tint = if (uiState.forecastSource == ForecastSource.OPEN_METEO) Color.White else BentoTextSecondary,
+                                tint = if (uiState.forecastSource == ForecastSource.OPEN_METEO) MetterOnInfo else BentoTextSecondary,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -409,10 +425,10 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (uiState.apiKey.isNotBlank()) Color(0xFFE8F5E9) else Color(0xFFFFF8E1))
+                        .background(if (uiState.apiKey.isNotBlank()) MetterSuccessContainer else MetterWarningContainer)
                         .border(
                             1.dp,
-                            if (uiState.apiKey.isNotBlank()) Color(0xFFA5D6A7) else Color(0xFFFFE082),
+                            if (uiState.apiKey.isNotBlank()) MetterSuccessBorder else MetterWarningBorder,
                             RoundedCornerShape(12.dp)
                         )
                         .padding(horizontal = 12.dp, vertical = 8.dp)
@@ -420,7 +436,7 @@ fun SettingsScreen(
                     Icon(
                         imageVector = if (uiState.apiKey.isNotBlank()) Icons.Default.CheckCircle else Icons.Default.Info,
                         contentDescription = null,
-                        tint = if (uiState.apiKey.isNotBlank()) Color(0xFF2E7D32) else Color(0xFFF57F17),
+                        tint = if (uiState.apiKey.isNotBlank()) MetterSuccessContent else MetterWarningContent,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -431,7 +447,7 @@ fun SettingsScreen(
                             "No API key saved — Using open meteorological fallback"
                         },
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = if (uiState.apiKey.isNotBlank()) Color(0xFF1B5E20) else Color(0xFFE65100),
+                            color = if (uiState.apiKey.isNotBlank()) MetterSuccessContent else MetterWarningContent,
                             fontWeight = FontWeight.Medium,
                             fontSize = 12.sp
                         )
@@ -474,7 +490,7 @@ fun SettingsScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = BentoPurplePrimary,
                         unfocusedBorderColor = BentoBorder,
-                        focusedContainerColor = Color.White,
+                        focusedContainerColor = MetterFieldContainer,
                         unfocusedContainerColor = BentoHero
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -505,7 +521,7 @@ fun SettingsScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = BentoPurplePrimary,
                         unfocusedBorderColor = BentoBorder,
-                        focusedContainerColor = Color.White,
+                        focusedContainerColor = MetterFieldContainer,
                         unfocusedContainerColor = BentoHero
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -523,8 +539,8 @@ fun SettingsScreen(
                         is ApiKeyTestResult.Success -> {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = Color(0xFFE8F5E9),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA5D6A7)),
+                                color = MetterSuccessContainer,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MetterSuccessBorder),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -534,14 +550,14 @@ fun SettingsScreen(
                                     Icon(
                                         imageVector = Icons.Default.CheckCircle,
                                         contentDescription = null,
-                                        tint = Color(0xFF2E7D32),
+                                        tint = MetterSuccessContent,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = status.message,
                                         style = MaterialTheme.typography.bodySmall.copy(
-                                            color = Color(0xFF1B5E20),
+                                            color = MetterSuccessContent,
                                             fontWeight = FontWeight.Medium
                                         )
                                     )
@@ -551,8 +567,8 @@ fun SettingsScreen(
                         is ApiKeyTestResult.Error -> {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = Color(0xFFFFEBEE),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFCDD2)),
+                                color = MetterErrorContainer,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MetterErrorBorder),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -562,14 +578,14 @@ fun SettingsScreen(
                                     Icon(
                                         imageVector = Icons.Default.Error,
                                         contentDescription = null,
-                                        tint = Color(0xFFC62828),
+                                        tint = MetterErrorContent,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = status.message,
                                         style = MaterialTheme.typography.bodySmall.copy(
-                                            color = Color(0xFFB71C1C),
+                                            color = MetterErrorContent,
                                             fontWeight = FontWeight.Medium
                                         )
                                     )
@@ -640,14 +656,14 @@ fun SettingsScreen(
                             },
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFFFEBEE))
-                                .border(1.dp, Color(0xFFFFCDD2), RoundedCornerShape(12.dp))
+                                .background(MetterErrorContainer)
+                                .border(1.dp, MetterErrorBorder, RoundedCornerShape(12.dp))
                                 .testTag("clear_api_key_button")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Clear API Key",
-                                tint = Color(0xFFC62828),
+                                tint = MetterErrorContent,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -738,7 +754,7 @@ fun SettingsScreen(
                 Text(
                     text = if (bpfConfigured) "BPF key configured" else "No BPF key saved",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = if (bpfConfigured) Color(0xFF2E7D32) else Color(0xFFE65100),
+                        color = if (bpfConfigured) MetterSuccessContent else MetterWarningContent,
                         fontWeight = FontWeight.Medium
                     )
                 )
@@ -768,9 +784,9 @@ fun SettingsScreen(
                     },
                     shape = RoundedCornerShape(14.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF2E7D32),
+                        focusedBorderColor = MetterSuccessContent,
                         unfocusedBorderColor = BentoBorder,
-                        focusedContainerColor = Color.White,
+                        focusedContainerColor = MetterFieldContainer,
                         unfocusedContainerColor = BentoHero
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -787,7 +803,7 @@ fun SettingsScreen(
                     val isSuccess = status is ApiKeyTestResult.Success
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = if (isSuccess) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                        color = if (isSuccess) MetterSuccessContainer else MetterErrorContainer,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -797,7 +813,7 @@ fun SettingsScreen(
                                 null -> ""
                             },
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = if (isSuccess) Color(0xFF1B5E20) else Color(0xFFB71C1C),
+                                color = if (isSuccess) MetterSuccessContent else MetterErrorContent,
                                 fontWeight = FontWeight.Medium
                             ),
                             modifier = Modifier.padding(12.dp)
@@ -833,7 +849,10 @@ fun SettingsScreen(
                                 Toast.makeText(context, "BPF API key saved", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MetterSuccessContent,
+                            contentColor = MetterOnSuccess
+                        ),
                         modifier = Modifier.weight(1.3f).testTag("save_bpf_api_key_button")
                     ) { Text("Save & Apply") }
                     if (bpfConfigured || bpfApiKeyInput.isNotBlank()) {
@@ -844,10 +863,10 @@ fun SettingsScreen(
                             },
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFFFEBEE))
+                                .background(MetterErrorContainer)
                                 .testTag("clear_bpf_api_key_button")
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Clear BPF key", tint = Color(0xFFC62828))
+                            Icon(Icons.Default.Delete, contentDescription = "Clear BPF key", tint = MetterErrorContent)
                         }
                     }
                 }
@@ -867,7 +886,7 @@ fun SettingsScreen(
                 Text(
                     text = if (configured) "Map Images key configured" else "No Map Images key saved",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = if (configured) Color(0xFF2E7D32) else Color(0xFFE65100),
+                        color = if (configured) MetterSuccessContent else MetterWarningContent,
                         fontWeight = FontWeight.Medium
                     )
                 )
@@ -899,7 +918,7 @@ fun SettingsScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = BentoPurplePrimary,
                         unfocusedBorderColor = BentoBorder,
-                        focusedContainerColor = Color.White,
+                        focusedContainerColor = MetterFieldContainer,
                         unfocusedContainerColor = BentoHero
                     ),
                     modifier = Modifier.fillMaxWidth().testTag("map_images_api_key_text_field")
@@ -909,7 +928,7 @@ fun SettingsScreen(
                     val success = status is ApiKeyTestResult.Success
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = if (success) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                        color = if (success) MetterSuccessContainer else MetterErrorContainer,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -917,7 +936,7 @@ fun SettingsScreen(
                                 is ApiKeyTestResult.Success -> status.message
                                 is ApiKeyTestResult.Error -> status.message
                             },
-                            color = if (success) Color(0xFF1B5E20) else Color(0xFFB71C1C),
+                            color = if (success) MetterSuccessContent else MetterErrorContent,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(12.dp)
                         )
@@ -947,7 +966,7 @@ fun SettingsScreen(
                         IconButton(onClick = {
                             mapImagesApiKeyInput = ""
                             viewModel.clearMapImagesApiKey()
-                        }) { Icon(Icons.Default.Delete, "Clear Map Images key", tint = Color(0xFFC62828)) }
+                        }) { Icon(Icons.Default.Delete, "Clear Map Images key", tint = MetterErrorContent) }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -973,7 +992,44 @@ fun SettingsScreen(
                 )
             }
 
-            // Section 4: Units of Measurement
+            SettingsCard(
+                title = "Appearance",
+                icon = Icons.Default.Visibility,
+                subtitle = "Choose how Metter Weather looks"
+            ) {
+                Text(
+                    text = "Theme",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = BentoTextPrimary
+                    )
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ThemeMode.entries.forEach { mode ->
+                        UnitOptionButton(
+                            label = mode.displayName,
+                            selected = uiState.themeMode == mode,
+                            onClick = { viewModel.setThemeMode(mode) },
+                            modifier = Modifier.weight(1f).testTag("theme_${mode.name.lowercase()}")
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = when (uiState.themeMode) {
+                        ThemeMode.SYSTEM -> "Uses your device's light or dark appearance."
+                        ThemeMode.LIGHT -> "Always uses the light appearance."
+                        ThemeMode.DARK -> "Always uses the dark appearance."
+                    },
+                    style = MaterialTheme.typography.bodySmall.copy(color = BentoTextSecondary)
+                )
+            }
+
+            // Units of Measurement
             SettingsCard(
                 title = "Units of Measurement",
                 icon = Icons.Default.Tune,
@@ -1108,12 +1164,12 @@ fun SettingsScreen(
                             )
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = if (isSuccess) Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
+                                color = if (isSuccess) MetterSuccessContainer else MetterErrorContainer
                             ) {
                                 Text(
                                     text = if (isSuccess) "HTTP ${debug.httpStatusCode} OK" else "HTTP ${debug.httpStatusCode} Error",
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        color = if (isSuccess) Color(0xFF2E7D32) else Color(0xFFC62828),
+                                        color = if (isSuccess) MetterSuccessContent else MetterErrorContent,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 10.sp
                                     ),
@@ -1299,7 +1355,7 @@ fun SettingsScreen(
                 } else {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFF1F5F9),
+                        color = BentoTile,
                         border = androidx.compose.foundation.BorderStroke(1.dp, BentoBorder.copy(alpha = 0.5f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1377,7 +1433,7 @@ fun SettingsScreen(
                 // Status info box
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = if (uiState.widgetRefreshInterval != WidgetRefreshInterval.OFF) Color(0xFFEDE7F6) else BentoHero,
+                    color = if (uiState.widgetRefreshInterval != WidgetRefreshInterval.OFF) BentoPillAccent.copy(alpha = 0.55f) else BentoHero,
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
                         if (uiState.widgetRefreshInterval != WidgetRefreshInterval.OFF) BentoPurplePrimary.copy(alpha = 0.4f) else BentoBorder.copy(alpha = 0.5f)
@@ -1566,7 +1622,7 @@ fun UnitOptionButton(
                 text = label,
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (selected) Color.White else BentoTextPrimary,
+                    color = if (selected) BentoOnPrimary else BentoTextPrimary,
                     fontSize = 12.sp
                 ),
                 maxLines = 1

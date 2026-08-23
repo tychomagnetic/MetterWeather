@@ -70,9 +70,13 @@ import io.github.tychomagnetic.metterweather.ui.components.WeatherTopBar
 import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoOnPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorBorder
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContent
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -149,8 +153,8 @@ fun WeatherScreen(
                 if (uiState.errorMessage != null && report != null) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFFFEBEE),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFCDD2)),
+                        color = MetterErrorContainer,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MetterErrorBorder),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -162,14 +166,14 @@ fun WeatherScreen(
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = null,
-                                tint = Color(0xFFD32F2F),
+                                tint = MetterErrorContent,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = uiState.errorMessage ?: "",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = Color(0xFFB71C1C),
+                                    color = MetterErrorContent,
                                     fontWeight = FontWeight.Medium
                                 ),
                                 modifier = Modifier.weight(1f)
@@ -409,7 +413,7 @@ fun WeatherScreen(
                                 onClick = { viewModel.loadWeather() },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = BentoPurplePrimary,
-                                    contentColor = Color.White
+                                    contentColor = BentoOnPrimary
                                 ),
                                 shape = RoundedCornerShape(16.dp)
                             ) {

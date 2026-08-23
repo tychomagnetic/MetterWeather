@@ -87,10 +87,15 @@ import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
 import io.github.tychomagnetic.metterweather.ui.theme.BentoCardWhite
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoOnPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPillAccent
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContent
+import io.github.tychomagnetic.metterweather.ui.theme.MetterSuccessContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterSuccessContent
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 import java.util.Locale
 
@@ -348,7 +353,7 @@ private fun LocationSummaryCard(
                 val isMetOfficeSource = debugInfo?.dataSource == WeatherDataSource.MET_OFFICE_DATAHUB || isBpf
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = if (isMetOfficeSource) Color(0xFFE8F5E9) else BentoHero
+                    color = if (isMetOfficeSource) MetterSuccessContainer else BentoHero
                 ) {
                     Text(
                         text = when {
@@ -358,7 +363,7 @@ private fun LocationSummaryCard(
                         },
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            color = if (isMetOfficeSource) Color(0xFF2E7D32) else BentoHeroText,
+                            color = if (isMetOfficeSource) MetterSuccessContent else BentoHeroText,
                             fontSize = 10.sp
                         ),
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
@@ -396,7 +401,7 @@ private fun LocationSummaryCard(
                             text = "HTTP ${debugInfo.httpStatusCode} (${debugInfo.responseTimeMs}ms)",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (debugInfo.httpStatusCode == 200) Color(0xFF2E7D32) else Color(0xFFC62828),
+                                color = if (debugInfo.httpStatusCode == 200) MetterSuccessContent else MetterErrorContent,
                                 fontSize = 10.5.sp
                             )
                         )
@@ -500,7 +505,7 @@ private fun RawJsonViewerTab(
                             text = title,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) Color.White else BentoTextPrimary,
+                                color = if (isSelected) BentoOnPrimary else BentoTextPrimary,
                                 fontSize = 10.5.sp
                             ),
                             maxLines = 1,
@@ -731,13 +736,13 @@ private fun CoordinateSandboxTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (isLoading) {
-                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                CircularProgressIndicator(color = BentoOnPrimary, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Querying Weather API...", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("Querying Weather API...", color = BentoOnPrimary, fontWeight = FontWeight.Bold)
                             } else {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = BentoOnPrimary, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Execute Live API Query", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("Execute Live API Query", color = BentoOnPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -768,13 +773,13 @@ private fun CoordinateSandboxTab(
                             )
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (testResult.isError) Color(0xFFFFEBEE) else Color(0xFFE8F5E9)
+                                color = if (testResult.isError) MetterErrorContainer else MetterSuccessContainer
                             ) {
                                 Text(
                                     text = "HTTP ${testResult.httpStatusCode} (${testResult.responseTimeMs}ms)",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = FontWeight.Bold,
-                                        color = if (testResult.isError) Color(0xFFC62828) else Color(0xFF2E7D32)
+                                        color = if (testResult.isError) MetterErrorContent else MetterSuccessContent
                                     ),
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
@@ -796,7 +801,7 @@ private fun CoordinateSandboxTab(
                         if (testResult.currentTempCelsius != null) {
                             Text(
                                 text = "Current Temperature: ${testResult.currentTempCelsius}°C",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = Color(0xFF1B5E20))
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = MetterSuccessContent)
                             )
                         }
 
@@ -957,7 +962,7 @@ private fun GeocodingInspectorTab(
                                 ) {
                                     Text(
                                         text = "Select",
-                                        style = MaterialTheme.typography.labelSmall.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                                        style = MaterialTheme.typography.labelSmall.copy(color = BentoOnPrimary, fontWeight = FontWeight.Bold, fontSize = 10.sp),
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
@@ -1079,7 +1084,7 @@ private fun ChecklistRow(text: String) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
         verticalAlignment = Alignment.Top
     ) {
-        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(14.dp).padding(top = 2.dp))
+        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MetterSuccessContent, modifier = Modifier.size(14.dp).padding(top = 2.dp))
         Spacer(modifier = Modifier.width(6.dp))
         Text(text = text, style = MaterialTheme.typography.bodySmall.copy(color = BentoTextPrimary, fontSize = 11.5.sp))
     }

@@ -12,6 +12,7 @@ import io.github.tychomagnetic.metterweather.data.model.ForecastSource
 import io.github.tychomagnetic.metterweather.data.model.LocationItem
 import io.github.tychomagnetic.metterweather.data.model.PressureUnit
 import io.github.tychomagnetic.metterweather.data.model.TemperatureUnit
+import io.github.tychomagnetic.metterweather.data.model.ThemeMode
 import io.github.tychomagnetic.metterweather.data.model.WeatherDataSource
 import io.github.tychomagnetic.metterweather.data.model.WeatherReport
 import io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval
@@ -53,6 +54,7 @@ data class WeatherUiState(
     val tempUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
     val windUnit: WindSpeedUnit = WindSpeedUnit.MPH,
     val pressureUnit: PressureUnit = PressureUnit.HPA,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val widgetRefreshInterval: WidgetRefreshInterval = WidgetRefreshInterval.ONE_HOUR,
     val widgetUseGps: Boolean = false,
     val widgetFixedLocation: LocationItem = LocationItem.DEFAULT_LOCATIONS.first(),
@@ -117,6 +119,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
         val initialTempUnit = preferencesManager.getTemperatureUnit()
         val initialWindUnit = preferencesManager.getWindSpeedUnit()
         val initialPressureUnit = preferencesManager.getPressureUnit()
+        val initialThemeMode = preferencesManager.getThemeMode()
         val savedRefreshInterval = preferencesManager.getWidgetRefreshInterval()
         val initialRefreshInterval = if (savedRefreshInterval == WidgetRefreshInterval.OFF) {
             WidgetRefreshInterval.OFF
@@ -142,6 +145,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                 tempUnit = initialTempUnit,
                 windUnit = initialWindUnit,
                 pressureUnit = initialPressureUnit,
+                themeMode = initialThemeMode,
                 widgetRefreshInterval = initialRefreshInterval,
                 widgetUseGps = initialWidgetUseGps,
                 widgetFixedLocation = initialWidgetFixedLocation,
@@ -665,6 +669,11 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             HourlyForecastWidget.updateAllWidgets(getApplication<Application>().applicationContext)
         }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        preferencesManager.setThemeMode(mode)
+        _uiState.update { it.copy(themeMode = mode) }
     }
 
     fun setWindSpeedUnit(unit: WindSpeedUnit) {

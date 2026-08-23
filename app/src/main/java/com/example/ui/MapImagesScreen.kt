@@ -69,6 +69,11 @@ import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContent
+import io.github.tychomagnetic.metterweather.ui.theme.MetterFieldContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterWarningContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterWarningContent
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -167,12 +172,12 @@ fun MapImagesScreen(
                 )
             }
 
-            state.warningMessage?.let { MessageSurface(it, Color(0xFFFFF8E1), Color(0xFFE65100)) }
-            state.errorMessage?.let { MessageSurface(it, Color(0xFFFFEBEE), Color(0xFFB71C1C)) }
+            state.warningMessage?.let { MessageSurface(it, MetterWarningContainer, MetterWarningContent) }
+            state.errorMessage?.let { MessageSurface(it, MetterErrorContainer, MetterErrorContent) }
 
             Surface(
                 shape = RoundedCornerShape(18.dp),
-                color = Color(0xFFE9EDF2),
+                color = MetterFieldContainer,
                 border = androidx.compose.foundation.BorderStroke(1.dp, BentoBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -277,8 +282,8 @@ private fun <T> MapDropdown(
             colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                 focusedTextColor = BentoTextPrimary,
                 unfocusedTextColor = BentoTextPrimary,
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
+                focusedContainerColor = MetterFieldContainer,
+                unfocusedContainerColor = MetterFieldContainer,
                 focusedBorderColor = BentoPurplePrimary,
                 unfocusedBorderColor = BentoBorder,
                 focusedTrailingIconColor = BentoPurplePrimary,
@@ -289,7 +294,7 @@ private fun <T> MapDropdown(
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(Color.White)
+            modifier = Modifier.background(MetterFieldContainer)
         ) {
             options.forEach { option ->
                 DropdownMenuItem(

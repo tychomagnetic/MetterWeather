@@ -10,6 +10,7 @@ import io.github.tychomagnetic.metterweather.data.model.LocationItem
 import io.github.tychomagnetic.metterweather.data.model.MapManifestCache
 import io.github.tychomagnetic.metterweather.data.model.PressureUnit
 import io.github.tychomagnetic.metterweather.data.model.TemperatureUnit
+import io.github.tychomagnetic.metterweather.data.model.ThemeMode
 import io.github.tychomagnetic.metterweather.data.model.ForecastSource
 import io.github.tychomagnetic.metterweather.data.model.WeatherDataSource
 import io.github.tychomagnetic.metterweather.data.model.WeatherReport
@@ -63,6 +64,9 @@ class PreferencesManager(context: Context) {
 
     private val _pressureUnitFlow = MutableStateFlow(getPressureUnit())
     val pressureUnitFlow: StateFlow<PressureUnit> = _pressureUnitFlow.asStateFlow()
+
+    private val _themeModeFlow = MutableStateFlow(getThemeMode())
+    val themeModeFlow: StateFlow<ThemeMode> = _themeModeFlow.asStateFlow()
 
     private val _useMetOfficeSourceFlow = MutableStateFlow(isMetOfficePreferred())
     val useMetOfficeSourceFlow: StateFlow<Boolean> = _useMetOfficeSourceFlow.asStateFlow()
@@ -241,6 +245,20 @@ class PreferencesManager(context: Context) {
     fun setTemperatureUnit(unit: TemperatureUnit) {
         prefs.edit().putString(KEY_TEMP_UNIT, unit.name).apply()
         _tempUnitFlow.value = unit
+    }
+
+    fun getThemeMode(): ThemeMode {
+        val name = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)
+        return try {
+            ThemeMode.valueOf(name ?: ThemeMode.SYSTEM.name)
+        } catch (_: Exception) {
+            ThemeMode.SYSTEM
+        }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+        _themeModeFlow.value = mode
     }
 
     fun getWindSpeedUnit(): WindSpeedUnit {
@@ -467,6 +485,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_TEMP_UNIT = "temp_unit"
         private const val KEY_WIND_UNIT = "wind_unit"
         private const val KEY_PRESSURE_UNIT = "pressure_unit"
+        private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_USE_MET_OFFICE = "use_met_office_source"
         private const val KEY_FORECAST_SOURCE = "forecast_source"
         private const val KEY_API_ONBOARDING_DISMISSED = "api_onboarding_dismissed"

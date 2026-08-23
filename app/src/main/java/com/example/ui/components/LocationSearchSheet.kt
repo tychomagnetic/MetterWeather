@@ -68,6 +68,7 @@ import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
 import io.github.tychomagnetic.metterweather.ui.theme.BentoCardWhite
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoOnPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
@@ -304,7 +305,7 @@ fun LocationSearchSheet(
                                     Icon(
                                         imageVector = Icons.Default.Favorite,
                                         contentDescription = null,
-                                        tint = if (isSelected) Color.White else Color(0xFFE91E63),
+                                        tint = if (isSelected) BentoOnPrimary else Color(0xFFE91E63),
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -312,7 +313,7 @@ fun LocationSearchSheet(
                                         text = loc.name,
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontWeight = FontWeight.SemiBold,
-                                            color = if (isSelected) Color.White else BentoTextPrimary
+                                            color = if (isSelected) BentoOnPrimary else BentoTextPrimary
                                         )
                                     )
                                 }
@@ -357,7 +358,7 @@ fun LocationSearchSheet(
                                 Icon(
                                     imageVector = Icons.Default.LocationCity,
                                     contentDescription = null,
-                                    tint = if (isSelected) Color.White else BentoPurplePrimary,
+                                    tint = if (isSelected) BentoOnPrimary else BentoPurplePrimary,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -365,7 +366,7 @@ fun LocationSearchSheet(
                                     text = loc.name,
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         fontWeight = FontWeight.SemiBold,
-                                        color = if (isSelected) Color.White else BentoTextPrimary
+                                        color = if (isSelected) BentoOnPrimary else BentoTextPrimary
                                     )
                                 )
                             }

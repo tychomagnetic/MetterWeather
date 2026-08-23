@@ -196,7 +196,10 @@ fun DailyForecastRowItem(
         // Weather Icon & Rain %
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.width(65.dp)
+            // Leave enough room for the icon and a three-digit probability.
+            // The extra width moves the minimum temperature to the right while
+            // preserving the overall row width.
+            modifier = Modifier.width(76.dp)
         ) {
             WeatherIconView(
                 iconType = item.dayWeatherCode.iconType,
@@ -219,7 +222,8 @@ fun DailyForecastRowItem(
                             fontSize = 10.sp,
                             fontWeight = if (isHighPrecip) FontWeight.Bold else FontWeight.Medium,
                             color = precipColor
-                        )
+                        ),
+                        maxLines = 1
                     )
                 }
             }
@@ -248,6 +252,8 @@ fun DailyForecastRowItem(
             val startRatio = ((item.minTempCelsius - globalMin) / range).coerceIn(0.0, 1.0).toFloat()
             val endRatio = ((item.maxTempCelsius - globalMin) / range).coerceIn(0.0, 1.0).toFloat()
 
+            val rangeTrackColor = BentoBorder.copy(alpha = 0.35f)
+            val rangeStartColor = BentoPurplePrimary
             Canvas(
                 modifier = Modifier
                     .weight(1f)
@@ -259,7 +265,7 @@ fun DailyForecastRowItem(
 
                 // Background track representing the full weekly range [globalMin..globalMax]
                 drawRoundRect(
-                    color = BentoBorder.copy(alpha = 0.35f),
+                    color = rangeTrackColor,
                     size = size,
                     cornerRadius = cornerRadius
                 )
@@ -273,7 +279,7 @@ fun DailyForecastRowItem(
                 // Draw the temperature range bar positioned exactly from startX to endX
                 drawRoundRect(
                     brush = Brush.horizontalGradient(
-                        colors = listOf(BentoPurplePrimary, SolarGold),
+                        colors = listOf(rangeStartColor, SolarGold),
                         startX = 0f,
                         endX = trackWidth
                     ),

@@ -60,9 +60,18 @@ import io.github.tychomagnetic.metterweather.data.model.ForecastSource
 import io.github.tychomagnetic.metterweather.data.model.WeatherDataSource
 import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
 import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
+import io.github.tychomagnetic.metterweather.ui.theme.BentoOnPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.MetterErrorContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterInfoContent
+import io.github.tychomagnetic.metterweather.ui.theme.MetterOnInfo
+import io.github.tychomagnetic.metterweather.ui.theme.MetterOnSuccess
+import io.github.tychomagnetic.metterweather.ui.theme.MetterSuccessContent
+import io.github.tychomagnetic.metterweather.ui.theme.MetterWarningBorder
+import io.github.tychomagnetic.metterweather.ui.theme.MetterWarningContainer
+import io.github.tychomagnetic.metterweather.ui.theme.MetterWarningContent
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 
 @Composable
@@ -185,7 +194,7 @@ fun WeatherTopBar(
                     label = "heart_tint"
                 )
                 val heartBg by animateColorAsState(
-                    targetValue = if (isFavorite) Color(0xFFFFEBEE) else BentoTile,
+                    targetValue = if (isFavorite) MetterErrorContainer else BentoTile,
                     animationSpec = tween(durationMillis = 220),
                     label = "heart_bg"
                 )
@@ -293,6 +302,7 @@ fun WeatherTopBar(
                 icon = Icons.Default.Cloud,
                 selected = forecastSource == ForecastSource.MET_OFFICE_SPOT,
                 selectedColor = BentoPurplePrimary,
+                selectedContentColor = BentoOnPrimary,
                 testTag = "toggle_met_office_button",
                 onClick = { onDataSourceSelect(ForecastSource.MET_OFFICE_SPOT) },
                 modifier = Modifier.weight(1f)
@@ -301,7 +311,8 @@ fun WeatherTopBar(
                 label = "BPF",
                 icon = Icons.Default.DataObject,
                 selected = forecastSource == ForecastSource.MET_OFFICE_BPF,
-                selectedColor = Color(0xFF2E7D32),
+                selectedColor = MetterSuccessContent,
+                selectedContentColor = MetterOnSuccess,
                 testTag = "toggle_bpf_button",
                 onClick = { onDataSourceSelect(ForecastSource.MET_OFFICE_BPF) },
                 modifier = Modifier.weight(1f)
@@ -310,7 +321,8 @@ fun WeatherTopBar(
                 label = "Open",
                 icon = Icons.Default.Public,
                 selected = forecastSource == ForecastSource.OPEN_METEO,
-                selectedColor = Color(0xFF0284C7),
+                selectedColor = MetterInfoContent,
+                selectedContentColor = MetterOnInfo,
                 testTag = "toggle_open_data_button",
                 onClick = { onDataSourceSelect(ForecastSource.OPEN_METEO) },
                 modifier = Modifier.weight(1f)
@@ -328,8 +340,8 @@ fun WeatherTopBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFFFF8E1))
-                    .border(1.dp, Color(0xFFFFE082), RoundedCornerShape(12.dp))
+                    .background(MetterWarningContainer)
+                    .border(1.dp, MetterWarningBorder, RoundedCornerShape(12.dp))
                     .clickable { onSettingsClick() }
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -342,7 +354,7 @@ fun WeatherTopBar(
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = null,
-                        tint = Color(0xFFE65100),
+                        tint = MetterWarningContent,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -353,7 +365,7 @@ fun WeatherTopBar(
                             "Met Office API key needed for UK official model"
                         },
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = Color(0xFFE65100),
+                            color = MetterWarningContent,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         ),
@@ -364,7 +376,7 @@ fun WeatherTopBar(
                 Text(
                     text = "Configure →",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        color = Color(0xFFE65100),
+                        color = MetterWarningContent,
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.5.sp
                     )
@@ -380,6 +392,7 @@ private fun SourceToggleButton(
     icon: ImageVector,
     selected: Boolean,
     selectedColor: Color,
+    selectedContentColor: Color,
     testTag: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -398,7 +411,7 @@ private fun SourceToggleButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (selected) Color.White else BentoTextSecondary,
+                tint = if (selected) selectedContentColor else BentoTextSecondary,
                 modifier = Modifier.size(15.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
@@ -406,7 +419,7 @@ private fun SourceToggleButton(
                 text = label,
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (selected) Color.White else BentoTextPrimary,
+                    color = if (selected) selectedContentColor else BentoTextPrimary,
                     fontSize = 11.sp
                 ),
                 maxLines = 1
