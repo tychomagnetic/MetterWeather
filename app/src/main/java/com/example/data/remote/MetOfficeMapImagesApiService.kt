@@ -1,7 +1,7 @@
-package com.example.data.remote
+package io.github.tychomagnetic.metterweather.data.remote
 
-import com.example.data.model.MapLatestResponse
-import com.example.data.model.MapOrdersResponse
+import io.github.tychomagnetic.metterweather.data.model.MapLatestResponse
+import io.github.tychomagnetic.metterweather.data.model.MapOrdersResponse
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.GET

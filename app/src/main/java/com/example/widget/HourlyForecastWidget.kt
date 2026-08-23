@@ -1,4 +1,4 @@
-package com.example.widget
+package io.github.tychomagnetic.metterweather.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
@@ -46,17 +46,18 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import com.example.MainActivity
-import com.example.R
-import com.example.data.local.PreferencesManager
-import com.example.data.model.HourlyForecastItem
-import com.example.data.model.LocationItem
-import com.example.data.model.MetOfficeWeatherCode
-import com.example.data.model.TemperatureUnit
-import com.example.data.model.WeatherIconType
-import com.example.data.model.WeatherReport
-import com.example.data.repository.WeatherRepository
-import com.example.data.util.TimezoneUtils
+import io.github.tychomagnetic.metterweather.MainActivity
+import io.github.tychomagnetic.metterweather.R
+import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
+import io.github.tychomagnetic.metterweather.data.model.HourlyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeWeatherCode
+import io.github.tychomagnetic.metterweather.data.model.TemperatureUnit
+import io.github.tychomagnetic.metterweather.data.model.WeatherIconType
+import io.github.tychomagnetic.metterweather.data.model.WeatherReport
+import io.github.tychomagnetic.metterweather.data.repository.WeatherRepository
+import io.github.tychomagnetic.metterweather.data.util.TimezoneUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -111,6 +112,8 @@ class HourlyForecastWidget : GlanceAppWidget() {
                     }
                     widget.update(context, glanceId)
                 }
+            } catch (error: CancellationException) {
+                throw error
             } catch (_: Exception) {
             }
         }
@@ -462,6 +465,8 @@ class RefreshWeatherActionCallback : ActionCallback {
                     WidgetLocationHelper.commitSuccessfulGpsLocation(prefs, location)
                     prefs.setWidgetPageOffset(0)
                 }
+            } catch (error: CancellationException) {
+                throw error
             } catch (_: Exception) {
             }
         }

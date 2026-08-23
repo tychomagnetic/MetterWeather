@@ -1,4 +1,4 @@
-package com.example.ui.components
+package io.github.tychomagnetic.metterweather.ui.components
 
 import android.content.Intent
 import android.net.Uri
@@ -59,15 +59,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.repository.ApiKeyTestResult
-import com.example.ui.theme.BentoBorder
-import com.example.ui.theme.BentoCardWhite
-import com.example.ui.theme.BentoHero
-import com.example.ui.theme.BentoHeroText
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.BentoTile
+import io.github.tychomagnetic.metterweather.data.repository.ApiKeyTestResult
+import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
+import io.github.tychomagnetic.metterweather.ui.theme.BentoCardWhite
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 
 @Composable
 fun ApiKeyDialog(

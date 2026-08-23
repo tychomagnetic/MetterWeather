@@ -1,8 +1,8 @@
-package com.example
+package io.github.tychomagnetic.metterweather
 
-import com.example.data.model.MapImageFile
-import com.example.data.model.MapFrame
-import com.example.data.util.MapImagesUtils
+import io.github.tychomagnetic.metterweather.data.model.MapImageFile
+import io.github.tychomagnetic.metterweather.data.model.MapFrame
+import io.github.tychomagnetic.metterweather.data.util.MapImagesUtils
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

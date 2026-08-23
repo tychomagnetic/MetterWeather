@@ -1,9 +1,12 @@
-package com.example.ui
+package io.github.tychomagnetic.metterweather.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,16 +58,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.ui.theme.BentoBorder
-import com.example.ui.theme.BentoHero
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.BentoTile
+import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -80,6 +84,7 @@ fun MapImagesScreen(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     LaunchedEffect(Unit) { viewModel.onScreenEntered() }
     BackHandler(onBack = onBack)
 
@@ -227,6 +232,20 @@ fun MapImagesScreen(
                 text = "The app checks for a new manifest once after each 00:00 or 12:00 UTC run boundary. Downloaded run-stamped frames are reused; the refresh button forces an early check.",
                 style = MaterialTheme.typography.bodySmall,
                 color = BentoTextSecondary
+            )
+            Text(
+                text = "Powered by Met Office data",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = BentoPurplePrimary,
+                    fontWeight = FontWeight.Medium
+                ),
+                modifier = Modifier.clickable {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.metoffice.gov.uk/"))
+                        )
+                    }
+                }
             )
             Spacer(Modifier.height(8.dp))
         }

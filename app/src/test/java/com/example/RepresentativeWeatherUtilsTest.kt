@@ -1,10 +1,10 @@
-package com.example
+package io.github.tychomagnetic.metterweather
 
-import com.example.data.model.DailyForecastItem
-import com.example.data.model.HourlyForecastItem
-import com.example.data.model.LocationItem
-import com.example.data.model.MetOfficeWeatherCode
-import com.example.data.util.RepresentativeWeatherUtils
+import io.github.tychomagnetic.metterweather.data.model.DailyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.HourlyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeWeatherCode
+import io.github.tychomagnetic.metterweather.data.util.RepresentativeWeatherUtils
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone

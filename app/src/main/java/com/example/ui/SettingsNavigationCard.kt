@@ -1,4 +1,4 @@
-package com.example.ui
+package io.github.tychomagnetic.metterweather.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
@@ -24,11 +24,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.BentoBorder
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.BentoTile
+import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 
 @Composable
 fun SettingsNavigationCard(

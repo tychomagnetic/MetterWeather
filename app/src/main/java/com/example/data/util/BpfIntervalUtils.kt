@@ -1,4 +1,4 @@
-package com.example.data.util
+package io.github.tychomagnetic.metterweather.data.util
 
 import java.text.SimpleDateFormat
 import java.util.Date

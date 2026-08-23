@@ -1,4 +1,4 @@
-package com.example.ui.components
+package io.github.tychomagnetic.metterweather.ui.components
 
 import android.Manifest
 import android.content.Context
@@ -63,15 +63,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.example.data.model.LocationItem
-import com.example.ui.theme.BentoBorder
-import com.example.ui.theme.BentoCardWhite
-import com.example.ui.theme.BentoHero
-import com.example.ui.theme.BentoHeroText
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.BentoTile
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
+import io.github.tychomagnetic.metterweather.ui.theme.BentoCardWhite
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -113,9 +113,8 @@ fun LocationSearchSheet(
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
         val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
-        if (fineGranted || coarseGranted) {
+        if (coarseGranted) {
             fetchGpsLocation(context, gpsWithKeyboard)
         }
     }
@@ -193,16 +192,12 @@ fun LocationSearchSheet(
                 onClick = {
                     keyboardController?.hide()
                     focusManager.clearFocus()
-                    val fineCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
                     val coarseCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
-                    if (fineCheck == PackageManager.PERMISSION_GRANTED || coarseCheck == PackageManager.PERMISSION_GRANTED) {
+                    if (coarseCheck == PackageManager.PERMISSION_GRANTED) {
                         fetchGpsLocation(context, gpsWithKeyboard)
                     } else {
                         locationPermissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION
-                            )
+                            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)
                         )
                     }
                 },

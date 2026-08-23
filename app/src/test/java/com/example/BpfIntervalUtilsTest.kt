@@ -1,6 +1,6 @@
-package com.example
+package io.github.tychomagnetic.metterweather
 
-import com.example.data.util.BpfIntervalUtils
+import io.github.tychomagnetic.metterweather.data.util.BpfIntervalUtils
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test

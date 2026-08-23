@@ -1,13 +1,13 @@
-package com.example
+package io.github.tychomagnetic.metterweather
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
-import com.example.data.model.CurrentWeather
-import com.example.data.model.MetOfficeWeatherCode
-import com.example.data.model.TemperatureUnit
-import com.example.data.model.WindSpeedUnit
-import com.example.ui.components.HeroWeatherCard
-import com.example.ui.theme.MetOfficeWeatherTheme
+import io.github.tychomagnetic.metterweather.data.model.CurrentWeather
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeWeatherCode
+import io.github.tychomagnetic.metterweather.data.model.TemperatureUnit
+import io.github.tychomagnetic.metterweather.data.model.WindSpeedUnit
+import io.github.tychomagnetic.metterweather.ui.components.HeroWeatherCard
+import io.github.tychomagnetic.metterweather.ui.theme.MetOfficeWeatherTheme
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule

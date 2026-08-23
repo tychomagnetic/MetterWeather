@@ -1,17 +1,17 @@
-package com.example
+package io.github.tychomagnetic.metterweather
 
 import android.Manifest
 import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.example.data.local.PreferencesManager
-import com.example.data.model.CurrentWeather
-import com.example.data.model.LocationItem
-import com.example.data.model.MetOfficeWeatherCode
-import com.example.data.model.WeatherDataSource
-import com.example.data.model.WeatherReport
-import com.example.ui.WeatherViewModel
-import com.example.widget.WidgetLocationHelper
+import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
+import io.github.tychomagnetic.metterweather.data.model.CurrentWeather
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeWeatherCode
+import io.github.tychomagnetic.metterweather.data.model.WeatherDataSource
+import io.github.tychomagnetic.metterweather.data.model.WeatherReport
+import io.github.tychomagnetic.metterweather.ui.WeatherViewModel
+import io.github.tychomagnetic.metterweather.widget.WidgetLocationHelper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -31,7 +31,7 @@ class ExampleRobolectricTest {
     fun `read string from context`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val appName = context.getString(R.string.app_name)
-        assertEquals("Met Office Weather (Dev)", appName)
+        assertEquals("Metter Weather", appName)
     }
 
     @Test
@@ -104,16 +104,16 @@ class ExampleRobolectricTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
         val viewModel = WeatherViewModel(app)
 
-        assertEquals(com.example.data.model.WidgetRefreshInterval.ONE_HOUR, viewModel.uiState.value.widgetRefreshInterval)
+        assertEquals(io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.ONE_HOUR, viewModel.uiState.value.widgetRefreshInterval)
 
-        viewModel.setWidgetRefreshInterval(com.example.data.model.WidgetRefreshInterval.TWO_HOURS)
-        assertEquals(com.example.data.model.WidgetRefreshInterval.ONE_HOUR, viewModel.uiState.value.widgetRefreshInterval)
+        viewModel.setWidgetRefreshInterval(io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.TWO_HOURS)
+        assertEquals(io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.ONE_HOUR, viewModel.uiState.value.widgetRefreshInterval)
 
-        viewModel.setWidgetRefreshInterval(com.example.data.model.WidgetRefreshInterval.FOUR_HOURS)
-        assertEquals(com.example.data.model.WidgetRefreshInterval.ONE_HOUR, viewModel.uiState.value.widgetRefreshInterval)
+        viewModel.setWidgetRefreshInterval(io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.FOUR_HOURS)
+        assertEquals(io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.ONE_HOUR, viewModel.uiState.value.widgetRefreshInterval)
 
-        viewModel.setWidgetRefreshInterval(com.example.data.model.WidgetRefreshInterval.OFF)
-        assertEquals(com.example.data.model.WidgetRefreshInterval.OFF, viewModel.uiState.value.widgetRefreshInterval)
+        viewModel.setWidgetRefreshInterval(io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.OFF)
+        assertEquals(io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.OFF, viewModel.uiState.value.widgetRefreshInterval)
     }
 
     @Test
@@ -162,6 +162,9 @@ class ExampleRobolectricTest {
         assertEquals(
             null,
             prefs.getFreshCachedBpfWeatherReport(location, twoHours, fetchedAt + twoHours + 1L)
+        )
+        assertNotNull(
+            prefs.getCachedBpfWeatherReport(location)
         )
         assertEquals(
             null,
@@ -242,7 +245,6 @@ class ExampleRobolectricTest {
     fun `GPS widget does not silently substitute fixed location without permission`() {
         val app = ApplicationProvider.getApplicationContext<Application>()
         shadowOf(app).denyPermissions(
-            Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
         val prefs = PreferencesManager(app)

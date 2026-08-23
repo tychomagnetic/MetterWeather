@@ -1,4 +1,4 @@
-package com.example.ui.components
+package io.github.tychomagnetic.metterweather.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
@@ -17,9 +17,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.data.model.WeatherIconType
-import com.example.ui.theme.RainCyan
-import com.example.ui.theme.SolarGold
+import io.github.tychomagnetic.metterweather.data.model.WeatherIconType
+import io.github.tychomagnetic.metterweather.ui.theme.RainCyan
+import io.github.tychomagnetic.metterweather.ui.theme.SolarGold
 import kotlin.math.cos
 import kotlin.math.sin
 

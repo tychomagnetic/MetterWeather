@@ -20,4 +20,6 @@ debug.keystore
 *.jks
 *.keystore
 *.key
+/my-upload-key.jks
+/release-signing.env.ps1
 /.api-fixtures/

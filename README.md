@@ -126,7 +126,7 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 Debug builds use a separate development package ID:
 
 ```text
-com.aistudio.metoffice.wxqaz.dev
+io.github.tychomagnetic.metterweather.dev
 ```
 
 This allows the development build to coexist with a production installation.
@@ -136,9 +136,9 @@ This allows the development build to coexist with a production installation.
 The app may request:
 
 - Internet access for forecast and geocoding requests
-- Approximate or precise location access for current-location forecasts
+- Approximate location access for current-location forecasts and the optional GPS widget mode
 
-Location access is optional; locations can also be searched or selected manually.
+Location access is optional and is only requested when you choose a current-location feature; locations can also be searched or selected manually.
 
 ## Project structure
 
@@ -162,7 +162,9 @@ app/src/main/java/com/example/
 
 Weather data is fetched from the selected provider and location searches use Open-Meteo geocoding. User settings, favourites, selected location, BPF location caches, and widget weather data are stored locally on the device.
 
-API credentials should be kept private and must not be committed to source control.
+API credentials are encrypted with the Android Keystore on supported devices. They should still be kept private and must not be committed to source control.
+
+The app displays the attribution required by each provider at the bottom of the relevant forecast or map screen. Met Office-backed data is labelled **“Powered by Met Office data”**; Open-Meteo-backed data is labelled **“Weather data by Open-Meteo.com”**, with links to the provider websites.
 
 ## Troubleshooting
 

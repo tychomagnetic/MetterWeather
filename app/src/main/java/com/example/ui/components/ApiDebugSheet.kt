@@ -1,4 +1,4 @@
-package com.example.ui.components
+package io.github.tychomagnetic.metterweather.ui.components
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -79,19 +79,19 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.ApiDebugInfo
-import com.example.data.model.CoordinateTestResult
-import com.example.data.model.LocationItem
-import com.example.data.model.WeatherDataSource
-import com.example.ui.theme.BentoBorder
-import com.example.ui.theme.BentoCardWhite
-import com.example.ui.theme.BentoHero
-import com.example.ui.theme.BentoHeroText
-import com.example.ui.theme.BentoPillAccent
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.BentoTile
+import io.github.tychomagnetic.metterweather.data.model.ApiDebugInfo
+import io.github.tychomagnetic.metterweather.data.model.CoordinateTestResult
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.WeatherDataSource
+import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
+import io.github.tychomagnetic.metterweather.ui.theme.BentoCardWhite
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPillAccent
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -402,6 +402,24 @@ private fun LocationSummaryCard(
                         )
                     }
                 }
+            }
+
+            debugInfo?.takeIf { it.bpfPercentileRequestTimeMs != null }?.let { bpfDebug ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = listOfNotNull(
+                        bpfDebug.bpfPercentileRequestTimeMs?.let { "Percentiles ${it}ms" },
+                        bpfDebug.bpfProbabilityRequestTimeMs?.let { "Probability ${it}ms" },
+                        bpfDebug.bpfParsingTimeMs?.let { "Parse ${it}ms" },
+                        bpfDebug.bpfTransformationTimeMs?.let { "Transform ${it}ms" },
+                        bpfDebug.bpfFallbackTimeMs?.let { "Fallback ${it}ms" }
+                    ).joinToString(" • "),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        color = BentoTextSecondary,
+                        fontSize = 10.sp
+                    )
+                )
             }
 
             if (debugInfo?.serverResolvedLat != null) {

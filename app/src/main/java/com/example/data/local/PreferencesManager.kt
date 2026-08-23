@@ -1,16 +1,20 @@
-package com.example.data.local
+package io.github.tychomagnetic.metterweather.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.example.data.model.LocationItem
-import com.example.data.model.MapManifestCache
-import com.example.data.model.PressureUnit
-import com.example.data.model.TemperatureUnit
-import com.example.data.model.ForecastSource
-import com.example.data.model.WeatherDataSource
-import com.example.data.model.WeatherReport
-import com.example.data.model.WidgetRefreshInterval
-import com.example.data.model.WindSpeedUnit
+import android.os.Build
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.MapManifestCache
+import io.github.tychomagnetic.metterweather.data.model.PressureUnit
+import io.github.tychomagnetic.metterweather.data.model.TemperatureUnit
+import io.github.tychomagnetic.metterweather.data.model.ForecastSource
+import io.github.tychomagnetic.metterweather.data.model.WeatherDataSource
+import io.github.tychomagnetic.metterweather.data.model.WeatherReport
+import io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval
+import io.github.tychomagnetic.metterweather.data.model.WindSpeedUnit
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -18,10 +22,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
+import java.nio.charset.StandardCharsets
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 class PreferencesManager(context: Context) {
 
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val securePrefs: SharedPreferences = context.applicationContext.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+    private val secureValueStore = SecureValueStore(securePrefs, allowPlaintextFallback = isRobolectricRuntime())
     private val moshi: Moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
 
     private val locationListAdapter = moshi.adapter<List<LocationItem>>(
@@ -93,6 +105,15 @@ class PreferencesManager(context: Context) {
         return if (prefs.getBoolean(KEY_USE_MET_OFFICE, true)) ForecastSource.MET_OFFICE_SPOT else ForecastSource.OPEN_METEO
     }
 
+    fun shouldShowApiOnboarding(): Boolean {
+        return getApiKey().isBlank() &&
+            !prefs.getBoolean(KEY_API_ONBOARDING_DISMISSED, false)
+    }
+
+    fun markApiOnboardingDismissed() {
+        prefs.edit().putBoolean(KEY_API_ONBOARDING_DISMISSED, true).apply()
+    }
+
     fun setForecastSource(source: ForecastSource) {
         prefs.edit()
             .putString(KEY_FORECAST_SOURCE, source.name)
@@ -103,34 +124,34 @@ class PreferencesManager(context: Context) {
     }
 
     fun getApiKey(): String {
-        return prefs.getString(KEY_MET_OFFICE_API_KEY, "") ?: ""
+        return getSecureValue(KEY_MET_OFFICE_API_KEY)
     }
 
     fun setApiKey(key: String) {
-        prefs.edit().putString(KEY_MET_OFFICE_API_KEY, key.trim()).apply()
+        setSecureValue(KEY_MET_OFFICE_API_KEY, key.trim())
         _apiKeyFlow.value = key.trim()
     }
 
     fun getClientSecret(): String {
-        return prefs.getString(KEY_MET_OFFICE_SECRET, "") ?: ""
+        return getSecureValue(KEY_MET_OFFICE_SECRET)
     }
 
     fun setClientSecret(secret: String) {
-        prefs.edit().putString(KEY_MET_OFFICE_SECRET, secret.trim()).apply()
+        setSecureValue(KEY_MET_OFFICE_SECRET, secret.trim())
         _clientSecretFlow.value = secret.trim()
     }
 
-    fun getBpfApiKey(): String = prefs.getString(KEY_MET_OFFICE_BPF_API_KEY, "") ?: ""
+    fun getBpfApiKey(): String = getSecureValue(KEY_MET_OFFICE_BPF_API_KEY)
 
     fun setBpfApiKey(key: String) {
-        prefs.edit().putString(KEY_MET_OFFICE_BPF_API_KEY, key.trim()).apply()
+        setSecureValue(KEY_MET_OFFICE_BPF_API_KEY, key.trim())
         _bpfApiKeyFlow.value = key.trim()
     }
 
-    fun getMapImagesApiKey(): String = prefs.getString(KEY_MET_OFFICE_MAP_IMAGES_API_KEY, "") ?: ""
+    fun getMapImagesApiKey(): String = getSecureValue(KEY_MET_OFFICE_MAP_IMAGES_API_KEY)
 
     fun setMapImagesApiKey(key: String) {
-        prefs.edit().putString(KEY_MET_OFFICE_MAP_IMAGES_API_KEY, key.trim()).apply()
+        setSecureValue(KEY_MET_OFFICE_MAP_IMAGES_API_KEY, key.trim())
     }
 
     fun getMapManifestCache(): MapManifestCache? {
@@ -272,6 +293,12 @@ class PreferencesManager(context: Context) {
         maxAgeMillis: Long,
         nowMillis: Long = System.currentTimeMillis()
     ): WeatherReport? {
+        val report = getCachedBpfWeatherReport(location) ?: return null
+        val ageMillis = nowMillis - report.fetchedAtMillis
+        return report.takeIf { ageMillis in 0..maxAgeMillis }
+    }
+
+    fun getCachedBpfWeatherReport(location: LocationItem): WeatherReport? {
         val locationCacheKey = bpfCacheKey(location)
         // Only entries written into the current verified, per-location cache are
         // eligible. Older reports did not retain enough server-coordinate data
@@ -283,16 +310,12 @@ class PreferencesManager(context: Context) {
             null
         } ?: return null
 
-        val ageMillis = nowMillis - report.fetchedAtMillis
         val sameLocation = kotlin.math.abs(report.location.latitude - location.latitude) < 0.0001 &&
             kotlin.math.abs(report.location.longitude - location.longitude) < 0.0001
-        val freshReport = report.takeIf {
+        return report.takeIf {
             it.dataSource == WeatherDataSource.MET_OFFICE_BPF &&
-                sameLocation &&
-                ageMillis in 0..maxAgeMillis
-        } ?: return null
-
-        return freshReport
+                sameLocation
+        }
     }
 
     fun setCachedBpfWeatherReport(report: WeatherReport) {
@@ -371,8 +394,9 @@ class PreferencesManager(context: Context) {
     }
 
     fun isWidgetGpsEnabled(): Boolean {
-        // Defaults to true (GPS imprecise location on widget refresh)
-        return prefs.getBoolean(KEY_WIDGET_USE_GPS, true)
+        // Keep first-run setup permission-free. Users can opt into approximate
+        // GPS explicitly from widget settings or the location picker.
+        return prefs.getBoolean(KEY_WIDGET_USE_GPS, false)
     }
 
     fun setWidgetGpsEnabled(useGps: Boolean) {
@@ -405,8 +429,32 @@ class PreferencesManager(context: Context) {
         _widgetFixedLocationFlow.value = location
     }
 
+    private fun getSecureValue(key: String): String {
+        secureValueStore.get(key)?.let { return it }
+
+        // Migrate keys saved by older versions out of the ordinary preferences
+        // file. The legacy value is removed immediately so a subsequent backup
+        // cannot carry it forward.
+        val legacyValue = prefs.getString(key, null)
+        if (legacyValue != null) {
+            prefs.edit().remove(key).apply()
+            if (legacyValue.isBlank()) return ""
+            return runCatching {
+                secureValueStore.put(key, legacyValue)
+                secureValueStore.get(key)
+            }.getOrNull().orEmpty()
+        }
+        return ""
+    }
+
+    private fun setSecureValue(key: String, value: String) {
+        if (value.isBlank()) secureValueStore.remove(key) else secureValueStore.put(key, value)
+        prefs.edit().remove(key).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "met_office_weather_prefs"
+        private const val SECURE_PREFS_NAME = "met_office_weather_secure"
         private const val KEY_MET_OFFICE_API_KEY = "met_office_api_key"
         private const val KEY_MET_OFFICE_SECRET = "met_office_secret"
         private const val KEY_MET_OFFICE_BPF_API_KEY = "met_office_bpf_api_key"
@@ -421,6 +469,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_PRESSURE_UNIT = "pressure_unit"
         private const val KEY_USE_MET_OFFICE = "use_met_office_source"
         private const val KEY_FORECAST_SOURCE = "forecast_source"
+        private const val KEY_API_ONBOARDING_DISMISSED = "api_onboarding_dismissed"
         private const val KEY_CACHED_WEATHER_REPORT = "cached_weather_report"
         private const val KEY_CACHED_WIDGET_WEATHER_REPORT = "cached_widget_weather_report"
         private const val KEY_CACHED_WIDGET_GPS_LOCATION = "cached_widget_gps_location"
@@ -432,3 +481,104 @@ class PreferencesManager(context: Context) {
         private const val KEY_WIDGET_FIXED_LOCATION = "widget_fixed_location"
     }
 }
+
+/**
+ * Encrypts API credentials with an AES/GCM key held in Android Keystore. A
+ * plaintext fallback is retained only for environments without an Android
+ * Keystore (for example JVM/Robolectric tests); the containing preferences file
+ * is excluded from Android backup regardless.
+ */
+private class SecureValueStore(
+    private val prefs: SharedPreferences,
+    private val allowPlaintextFallback: Boolean
+) {
+
+    fun get(key: String): String? {
+        val stored = prefs.getString(key, null) ?: return null
+        if (!stored.startsWith(ENCRYPTED_PREFIX)) {
+            // Upgrade any temporary plaintext fallback when Keystore becomes
+            // available again.
+            return runCatching {
+                put(key, stored)
+                stored
+            }.fold(
+                onSuccess = { it },
+                onFailure = {
+                    // Never leave a plaintext credential behind on a real device.
+                    prefs.edit().remove(key).apply()
+                    null
+                }
+            )
+        }
+        return runCatching { decrypt(stored.removePrefix(ENCRYPTED_PREFIX)) }.getOrElse {
+            prefs.edit().remove(key).apply()
+            null
+        }
+    }
+
+    fun put(key: String, value: String) {
+        val stored = runCatching { ENCRYPTED_PREFIX + encrypt(value) }.getOrElse {
+            if (allowPlaintextFallback) {
+                value
+            } else {
+                throw IllegalStateException("Android Keystore is unavailable; refusing to store an API credential in plaintext", it)
+            }
+        }
+        prefs.edit().putString(key, stored).apply()
+    }
+
+    fun remove(key: String) {
+        prefs.edit().remove(key).apply()
+    }
+
+    private fun encrypt(value: String): String {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val iv = cipher.iv
+        val ciphertext = cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
+        return Base64.encodeToString(byteArrayOf(iv.size.toByte()) + iv + ciphertext, Base64.NO_WRAP)
+    }
+
+    private fun decrypt(value: String): String {
+        val encoded = Base64.decode(value, Base64.NO_WRAP)
+        require(encoded.isNotEmpty())
+        val ivSize = encoded[0].toInt() and 0xFF
+        require(ivSize in 12..16 && encoded.size > ivSize + 1)
+        val iv = encoded.copyOfRange(1, ivSize + 1)
+        val ciphertext = encoded.copyOfRange(ivSize + 1, encoded.size)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(TAG_LENGTH_BITS, iv))
+        return String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
+    }
+
+    private fun getOrCreateKey(): SecretKey {
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        val existing = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+        if (existing != null) return existing
+
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+        generator.init(
+            KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build()
+        )
+        return generator.generateKey()
+    }
+
+    companion object {
+        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        private const val KEY_ALIAS = "met_office_weather_api_credentials"
+        private const val TRANSFORMATION = "AES/GCM/NoPadding"
+        private const val ENCRYPTED_PREFIX = "enc:v1:"
+        private const val TAG_LENGTH_BITS = 128
+    }
+}
+
+private fun isRobolectricRuntime(): Boolean =
+    Build.FINGERPRINT.equals("robolectric", ignoreCase = true) ||
+        Build.MODEL.equals("robolectric", ignoreCase = true)

@@ -1,4 +1,6 @@
-package com.example.data.model
+package io.github.tychomagnetic.metterweather.data.model
+
+import java.util.Locale
 
 enum class MetOfficeWeatherCode(val code: Int, val description: String, val isDay: Boolean, val iconType: WeatherIconType) {
     CLEAR_NIGHT(0, "Clear night", false, WeatherIconType.CLEAR_NIGHT),
@@ -195,7 +197,7 @@ enum class WeatherDataSource(val displayName: String, val isOfficialMetOffice: B
     MET_OFFICE_DATAHUB("Met Office DataHub API (Site-Specific)", true),
     MET_OFFICE_BPF("Met Office BPF Advanced Model", true),
     MET_OFFICE_DATAPOINT("Met Office DataPoint API", true),
-    OPEN_METEO_METEOROLOGICAL("Meteorological Unified Model (Demo)", false)
+    OPEN_METEO_METEOROLOGICAL("Open-Meteo best-match forecast", false)
 }
 
 /** The source selected in Settings. Kept separate from [WeatherDataSource], which describes a report. */
@@ -243,7 +245,7 @@ enum class PressureUnit(val label: String) {
     }
 
     fun format(hpa: Double): String = when (this) {
-        INHG -> String.format("%.2f %s", convert(hpa), label)
+        INHG -> String.format(Locale.US, "%.2f %s", convert(hpa), label)
         else -> "${convert(hpa).toInt()} $label"
     }
 }

@@ -1,7 +1,7 @@
-package com.example
+package io.github.tychomagnetic.metterweather
 
-import com.example.data.model.MetOfficeWeatherCode
-import com.example.data.model.WeatherIconType
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeWeatherCode
+import io.github.tychomagnetic.metterweather.data.model.WeatherIconType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test

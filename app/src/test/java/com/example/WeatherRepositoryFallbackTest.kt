@@ -1,25 +1,25 @@
-package com.example
+package io.github.tychomagnetic.metterweather
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.example.data.local.PreferencesManager
-import com.example.data.model.ForecastSource
-import com.example.data.model.LocationItem
-import com.example.data.model.MetOfficeGeometry
-import com.example.data.model.MetOfficeHourlyFeature
-import com.example.data.model.MetOfficeHourlyProperties
-import com.example.data.model.MetOfficeHourlyResponse
-import com.example.data.model.MetOfficeHourlyTimeSeriesItem
-import com.example.data.model.MetOfficeLocation
-import com.example.data.model.OpenMeteoResponse
-import com.example.data.model.OpenMeteoCurrent
-import com.example.data.model.OpenMeteoDaily
-import com.example.data.model.OpenMeteoHourly
-import com.example.data.model.WeatherDataSource
-import com.example.data.remote.MetOfficeApiService
-import com.example.data.remote.MetOfficeBpfApiService
-import com.example.data.remote.OpenMeteoApiService
-import com.example.data.repository.WeatherRepository
+import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
+import io.github.tychomagnetic.metterweather.data.model.ForecastSource
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeGeometry
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeHourlyFeature
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeHourlyProperties
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeHourlyResponse
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeHourlyTimeSeriesItem
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeLocation
+import io.github.tychomagnetic.metterweather.data.model.OpenMeteoResponse
+import io.github.tychomagnetic.metterweather.data.model.OpenMeteoCurrent
+import io.github.tychomagnetic.metterweather.data.model.OpenMeteoDaily
+import io.github.tychomagnetic.metterweather.data.model.OpenMeteoHourly
+import io.github.tychomagnetic.metterweather.data.model.WeatherDataSource
+import io.github.tychomagnetic.metterweather.data.remote.MetOfficeApiService
+import io.github.tychomagnetic.metterweather.data.remote.MetOfficeBpfApiService
+import io.github.tychomagnetic.metterweather.data.remote.OpenMeteoApiService
+import io.github.tychomagnetic.metterweather.data.repository.WeatherRepository
 import kotlinx.coroutines.runBlocking
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -430,7 +430,7 @@ class WeatherRepositoryFallbackTest {
             apiKey: String,
             clientId: String?,
             clientSecret: String?
-        ) = Response.error<com.example.data.model.MetOfficeDailyResponse>(404, "unused".toResponseBody())
+        ) = Response.error<io.github.tychomagnetic.metterweather.data.model.MetOfficeDailyResponse>(404, "unused".toResponseBody())
     }
 
     private class RecordingOpenMeteoApi : OpenMeteoApiService {

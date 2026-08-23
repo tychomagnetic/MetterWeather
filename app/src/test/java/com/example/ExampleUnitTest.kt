@@ -1,4 +1,4 @@
-package com.example
+package io.github.tychomagnetic.metterweather
 
 import org.junit.Assert.*
 import org.junit.Test

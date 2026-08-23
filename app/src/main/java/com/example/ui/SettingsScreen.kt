@@ -1,4 +1,4 @@
-package com.example.ui
+package io.github.tychomagnetic.metterweather.ui
 
 import android.Manifest
 import android.content.Intent
@@ -58,7 +58,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Widgets
-import com.example.ui.components.WidgetLocationPickerDialog
+import io.github.tychomagnetic.metterweather.ui.components.WidgetLocationPickerDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -100,28 +100,29 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.data.model.PressureUnit
-import com.example.data.model.ForecastSource
-import com.example.data.model.TemperatureUnit
-import com.example.data.model.WidgetRefreshInterval
-import com.example.data.model.WindSpeedUnit
-import com.example.data.repository.ApiKeyTestResult
-import com.example.ui.components.ApiDebugSheet
-import com.example.ui.theme.BentoBorder
-import com.example.ui.theme.BentoHero
-import com.example.ui.theme.BentoHeroText
-import com.example.ui.theme.BentoPillAccent
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.BentoTile
-import com.example.widget.WidgetLocationHelper
+import io.github.tychomagnetic.metterweather.data.model.PressureUnit
+import io.github.tychomagnetic.metterweather.data.model.ForecastSource
+import io.github.tychomagnetic.metterweather.data.model.TemperatureUnit
+import io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval
+import io.github.tychomagnetic.metterweather.data.model.WindSpeedUnit
+import io.github.tychomagnetic.metterweather.data.repository.ApiKeyTestResult
+import io.github.tychomagnetic.metterweather.ui.components.ApiDebugSheet
+import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPillAccent
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
+import io.github.tychomagnetic.metterweather.widget.WidgetLocationHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: WeatherViewModel,
     onBack: () -> Unit,
+    openApiSettingsOnOpen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -138,7 +139,7 @@ fun SettingsScreen(
     var isMapImagesApiKeyVisible by remember { mutableStateOf(false) }
     var isSecretVisible by remember { mutableStateOf(false) }
     var isHelpExpanded by remember { mutableStateOf(false) }
-    var apiSettingsOpen by remember { mutableStateOf(false) }
+    var apiSettingsOpen by remember(openApiSettingsOnOpen) { mutableStateOf(openApiSettingsOnOpen) }
     var widgetLocationPermissionGranted by remember {
         mutableStateOf(WidgetLocationHelper.hasLocationPermission(context))
     }
@@ -146,8 +147,7 @@ fun SettingsScreen(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         widgetLocationPermissionGranted =
-            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
                 WidgetLocationHelper.hasLocationPermission(context)
         if (widgetLocationPermissionGranted) {
             viewModel.setWidgetUseGps(true)
@@ -616,8 +616,9 @@ fun SettingsScreen(
                         onClick = {
                             focusManager.clearFocus()
                             keyboardController?.hide()
-                            viewModel.saveApiKey(apiKeyInput, clientSecretInput)
-                            Toast.makeText(context, "API Key Saved & Applied!", Toast.LENGTH_SHORT).show()
+                            if (viewModel.saveApiKey(apiKeyInput, clientSecretInput)) {
+                                Toast.makeText(context, "API Key Saved & Applied!", Toast.LENGTH_SHORT).show()
+                            }
                         },
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -828,8 +829,9 @@ fun SettingsScreen(
                         onClick = {
                             focusManager.clearFocus()
                             keyboardController?.hide()
-                            viewModel.saveBpfApiKey(bpfApiKeyInput)
-                            Toast.makeText(context, "BPF API key saved", Toast.LENGTH_SHORT).show()
+                            if (viewModel.saveBpfApiKey(bpfApiKeyInput)) {
+                                Toast.makeText(context, "BPF API key saved", Toast.LENGTH_SHORT).show()
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
                         modifier = Modifier.weight(1.3f).testTag("save_bpf_api_key_button")
@@ -934,8 +936,9 @@ fun SettingsScreen(
                     }
                     Button(
                         onClick = {
-                            viewModel.saveMapImagesApiKey(mapImagesApiKeyInput)
-                            Toast.makeText(context, "Map Images API key saved", Toast.LENGTH_SHORT).show()
+                            if (viewModel.saveMapImagesApiKey(mapImagesApiKeyInput)) {
+                                Toast.makeText(context, "Map Images API key saved", Toast.LENGTH_SHORT).show()
+                            }
                         },
                         enabled = mapImagesApiKeyInput.isNotBlank(),
                         modifier = Modifier.weight(1.3f).testTag("save_map_images_api_key_button")
@@ -1172,7 +1175,7 @@ fun SettingsScreen(
                     )
                 )
                 Text(
-                    text = "The widget defaults to imprecise GPS location when refreshing. You can also select a fixed location.",
+                    text = "The widget can use imprecise GPS location when refreshing. You can also select a fixed location.",
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = BentoTextSecondary,
                         fontSize = 11.5.sp
@@ -1186,7 +1189,7 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     UnitOptionButton(
-                        label = "GPS Location (Default)",
+                        label = "GPS Location",
                         selected = uiState.widgetUseGps,
                         onClick = {
                             widgetLocationPermissionGranted =
@@ -1196,10 +1199,7 @@ fun SettingsScreen(
                                 Toast.makeText(context, "Widget set to GPS location (imprecise on refresh)", Toast.LENGTH_SHORT).show()
                             } else {
                                 widgetLocationPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
+                                    arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)
                                 )
                             }
                         },

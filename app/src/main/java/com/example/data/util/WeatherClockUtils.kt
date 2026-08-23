@@ -1,6 +1,6 @@
-package com.example.data.util
+package io.github.tychomagnetic.metterweather.data.util
 
-import com.example.data.model.WeatherReport
+import io.github.tychomagnetic.metterweather.data.model.WeatherReport
 
 object WeatherClockUtils {
     data class Update(

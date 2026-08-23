@@ -6,8 +6,7 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- The Android Keystore key is device-bound, so never restore the
+         encrypted credential store onto another device. -->
+    <exclude domain="sharedpref" path="met_office_weather_secure.xml" />
 </full-backup-content>

@@ -1,4 +1,4 @@
-package com.example.data.model
+package io.github.tychomagnetic.metterweather.data.model
 
 enum class WidgetRefreshInterval(
     val hours: Int,

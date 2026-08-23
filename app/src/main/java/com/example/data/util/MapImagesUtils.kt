@@ -1,7 +1,7 @@
-package com.example.data.util
+package io.github.tychomagnetic.metterweather.data.util
 
-import com.example.data.model.MapFrame
-import com.example.data.model.MapImageFile
+import io.github.tychomagnetic.metterweather.data.model.MapFrame
+import io.github.tychomagnetic.metterweather.data.model.MapImageFile
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.ZonedDateTime

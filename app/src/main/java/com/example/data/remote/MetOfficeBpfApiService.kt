@@ -1,4 +1,4 @@
-package com.example.data.remote
+package io.github.tychomagnetic.metterweather.data.remote
 
 import okhttp3.ResponseBody
 import retrofit2.Response

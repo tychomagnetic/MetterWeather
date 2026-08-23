@@ -1,7 +1,7 @@
-package com.example
+package io.github.tychomagnetic.metterweather
 
-import com.example.data.model.LocationItem
-import com.example.data.util.TimezoneUtils
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.util.TimezoneUtils
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

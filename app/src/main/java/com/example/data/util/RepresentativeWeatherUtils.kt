@@ -1,9 +1,9 @@
-package com.example.data.util
+package io.github.tychomagnetic.metterweather.data.util
 
-import com.example.data.model.DailyForecastItem
-import com.example.data.model.HourlyForecastItem
-import com.example.data.model.LocationItem
-import com.example.data.model.MetOfficeWeatherCode
+import io.github.tychomagnetic.metterweather.data.model.DailyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.HourlyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeWeatherCode
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date

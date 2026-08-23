@@ -1,4 +1,4 @@
-package com.example.ui.components
+package io.github.tychomagnetic.metterweather.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,15 +28,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.CurrentWeather
-import com.example.data.model.TemperatureUnit
-import com.example.data.model.WindSpeedUnit
-import com.example.ui.theme.BentoBorder
-import com.example.ui.theme.BentoHero
-import com.example.ui.theme.BentoHeroText
-import com.example.ui.theme.BentoPillAccent
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.RainCyan
+import io.github.tychomagnetic.metterweather.data.model.CurrentWeather
+import io.github.tychomagnetic.metterweather.data.model.TemperatureUnit
+import io.github.tychomagnetic.metterweather.data.model.WindSpeedUnit
+import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPillAccent
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
+import io.github.tychomagnetic.metterweather.ui.theme.RainCyan
 
 @Composable
 fun HeroWeatherCard(

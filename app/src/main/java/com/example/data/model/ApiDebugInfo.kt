@@ -1,4 +1,4 @@
-package com.example.data.model
+package io.github.tychomagnetic.metterweather.data.model
 
 import com.squareup.moshi.JsonClass
 
@@ -10,6 +10,11 @@ data class ApiDebugInfo(
     val httpStatusCode: Int,
     val httpMessage: String,
     val responseTimeMs: Long,
+    val bpfPercentileRequestTimeMs: Long? = null,
+    val bpfProbabilityRequestTimeMs: Long? = null,
+    val bpfParsingTimeMs: Long? = null,
+    val bpfTransformationTimeMs: Long? = null,
+    val bpfFallbackTimeMs: Long? = null,
     val rawJsonHourly: String? = null,
     val rawJsonThreeHourly: String? = null,
     val rawJsonDaily: String? = null,

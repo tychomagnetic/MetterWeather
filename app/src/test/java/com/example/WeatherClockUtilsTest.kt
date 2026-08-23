@@ -1,13 +1,13 @@
-package com.example
+package io.github.tychomagnetic.metterweather
 
-import com.example.data.model.CurrentWeather
-import com.example.data.model.DailyForecastItem
-import com.example.data.model.HourlyForecastItem
-import com.example.data.model.LocationItem
-import com.example.data.model.MetOfficeWeatherCode
-import com.example.data.model.WeatherDataSource
-import com.example.data.model.WeatherReport
-import com.example.data.util.WeatherClockUtils
+import io.github.tychomagnetic.metterweather.data.model.CurrentWeather
+import io.github.tychomagnetic.metterweather.data.model.DailyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.HourlyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeWeatherCode
+import io.github.tychomagnetic.metterweather.data.model.WeatherDataSource
+import io.github.tychomagnetic.metterweather.data.model.WeatherReport
+import io.github.tychomagnetic.metterweather.data.util.WeatherClockUtils
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

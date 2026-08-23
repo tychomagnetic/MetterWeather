@@ -1,4 +1,4 @@
-package com.example.ui.components
+package io.github.tychomagnetic.metterweather.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -7,8 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import com.example.data.model.CurrentWeather
-import com.example.ui.theme.BentoCanvas
+import io.github.tychomagnetic.metterweather.data.model.CurrentWeather
+import io.github.tychomagnetic.metterweather.ui.theme.BentoCanvas
 
 @Composable
 fun WeatherBackground(

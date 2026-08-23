@@ -1,4 +1,4 @@
-package com.example.widget
+package io.github.tychomagnetic.metterweather.widget
 
 import android.Manifest
 import android.content.Context
@@ -9,8 +9,8 @@ import android.location.LocationManager
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.example.data.local.PreferencesManager
-import com.example.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
 import java.util.Locale
 import java.util.TimeZone
 
@@ -78,11 +78,7 @@ object WidgetLocationHelper {
         ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+        ) == PackageManager.PERMISSION_GRANTED
 
     /**
      * Obtains the last known coarse/imprecise location (Network or Passive provider preferred for battery & privacy).

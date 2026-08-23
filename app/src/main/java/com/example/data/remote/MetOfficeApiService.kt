@@ -1,7 +1,7 @@
-package com.example.data.remote
+package io.github.tychomagnetic.metterweather.data.remote
 
-import com.example.data.model.MetOfficeDailyResponse
-import com.example.data.model.MetOfficeHourlyResponse
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeDailyResponse
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeHourlyResponse
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Header

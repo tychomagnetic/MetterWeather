@@ -1,6 +1,9 @@
-package com.example.ui
+package io.github.tychomagnetic.metterweather.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -23,21 +26,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,29 +54,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.data.model.LocationItem
-import com.example.data.util.TimezoneUtils
-import com.example.ui.components.ApiDebugSheet
-import com.example.ui.components.ApiKeyDialog
-import com.example.ui.components.DailyForecastCard
-import com.example.ui.components.DayHourlyDetailSheet
-import com.example.ui.components.HeroWeatherCard
-import com.example.ui.components.HourlyForecastRow
-import com.example.ui.components.LocationSearchSheet
-import com.example.ui.components.UnitSettingsDialog
-import com.example.ui.components.WeatherBackground
-import com.example.ui.components.WeatherMetricsGrid
-import com.example.ui.components.WeatherTopBar
-import com.example.ui.theme.BentoBorder
-import com.example.ui.theme.BentoHero
-import com.example.ui.theme.BentoHeroText
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.util.TimezoneUtils
+import io.github.tychomagnetic.metterweather.ui.components.ApiDebugSheet
+import io.github.tychomagnetic.metterweather.ui.components.ApiKeyDialog
+import io.github.tychomagnetic.metterweather.ui.components.DailyForecastCard
+import io.github.tychomagnetic.metterweather.ui.components.DayHourlyDetailSheet
+import io.github.tychomagnetic.metterweather.ui.components.HeroWeatherCard
+import io.github.tychomagnetic.metterweather.ui.components.HourlyForecastRow
+import io.github.tychomagnetic.metterweather.ui.components.LocationSearchSheet
+import io.github.tychomagnetic.metterweather.ui.components.UnitSettingsDialog
+import io.github.tychomagnetic.metterweather.ui.components.WeatherBackground
+import io.github.tychomagnetic.metterweather.ui.components.WeatherMetricsGrid
+import io.github.tychomagnetic.metterweather.ui.components.WeatherTopBar
+import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeatherScreen(
     viewModel: WeatherViewModel,
@@ -75,6 +85,7 @@ fun WeatherScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val report = uiState.weatherReport
+    val context = LocalContext.current
 
     if (uiState.isMapImagesOpen) {
         val mapImagesViewModel: MapImagesViewModel = viewModel()
@@ -94,6 +105,7 @@ fun WeatherScreen(
         SettingsScreen(
             viewModel = viewModel,
             onBack = { viewModel.closeSettings() },
+            openApiSettingsOnOpen = uiState.openApiSettingsOnOpen,
             modifier = modifier
         )
         return
@@ -166,12 +178,20 @@ fun WeatherScreen(
                     }
                 }
 
-                // Main Content Body
+                // Main Content Body. Pull-to-refresh owns the available space so
+                // the gesture works anywhere in the vertically scrollable forecast.
+                PullToRefreshBox(
+                    isRefreshing = uiState.isRefreshing,
+                    onRefresh = { viewModel.loadWeather(isRefresh = true) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .testTag("weather_pull_to_refresh")
+                ) {
                 if (uiState.isLoading && report == null) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .weight(1f),
+                            .fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -185,7 +205,7 @@ fun WeatherScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "Fetching Met Office Forecast...",
+                                text = "Getting latest weather",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = BentoTextSecondary,
                                     fontWeight = FontWeight.Medium
@@ -200,8 +220,7 @@ fun WeatherScreen(
                     )
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+                            .fillMaxSize()
                             .verticalScroll(rememberScrollState())
                     ) {
                         // Hero Card (Current Temp, Condition, High/Low)
@@ -300,6 +319,42 @@ fun WeatherScreen(
                                     )
                                 )
                             }
+                            val attributions = buildList {
+                                add(
+                                    if (report.dataSource.isOfficialMetOffice) {
+                                        "Powered by Met Office data" to "https://www.metoffice.gov.uk/"
+                                    } else {
+                                        "Weather data by Open-Meteo.com" to "https://open-meteo.com/"
+                                    }
+                                )
+                                report.partialFallbackSource
+                                    ?.takeIf { it != report.dataSource }
+                                    ?.let { fallbackSource ->
+                                        add(
+                                            if (fallbackSource.isOfficialMetOffice) {
+                                                "Powered by Met Office data" to "https://www.metoffice.gov.uk/"
+                                            } else {
+                                                "Weather data by Open-Meteo.com" to "https://open-meteo.com/"
+                                            }
+                                        )
+                                    }
+                            }.distinct()
+                            attributions.forEach { (attribution, attributionUrl) ->
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = attribution,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = BentoPurplePrimary,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium
+                                    ),
+                                    modifier = Modifier.clickable {
+                                        runCatching {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(attributionUrl)))
+                                        }
+                                    }
+                                )
+                            }
                             val modelRunMillis = TimezoneUtils.parseIsoToMillis(report.modelRunTime)
                             val timestampMillis = modelRunMillis ?: report.fetchedAtMillis
                             Spacer(modifier = Modifier.height(2.dp))
@@ -320,8 +375,7 @@ fun WeatherScreen(
                     // Empty / Error State with Retry
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .weight(1f),
+                            .fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -365,6 +419,7 @@ fun WeatherScreen(
                             }
                         }
                     }
+                }
                 }
             }
         }
@@ -448,6 +503,37 @@ fun WeatherScreen(
                 }
             )
         }
+    }
+
+    if (uiState.isFirstRunApiPromptVisible) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissFirstRunApiPrompt() },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Key,
+                    contentDescription = null,
+                    tint = BentoPurplePrimary
+                )
+            },
+            title = { Text("Set up Metter Weather") },
+            text = {
+                Text(
+                    "For official Met Office forecasts, add a Spot API key from the Met Office DataHub. " +
+                        "The BPF advanced model and Weather Maps use separate optional keys. " +
+                        "You can continue with Open-Meteo, but Met Office features will be unavailable until configured."
+                )
+            },
+            confirmButton = {
+                Button(onClick = { viewModel.openApiSettingsFromFirstRun() }) {
+                    Text("Get API keys")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissFirstRunApiPrompt() }) {
+                    Text("Continue with Open-Meteo")
+                }
+            }
+        )
     }
 }
 

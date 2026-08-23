@@ -1,19 +1,20 @@
-package com.example.ui
+package io.github.tychomagnetic.metterweather.ui
 
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.local.PreferencesManager
-import com.example.data.model.MapFrame
-import com.example.data.model.MapOrder
-import com.example.data.repository.MapImagesRepository
-import com.example.data.util.MapImagesUtils
+import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
+import io.github.tychomagnetic.metterweather.data.model.MapFrame
+import io.github.tychomagnetic.metterweather.data.model.MapOrder
+import io.github.tychomagnetic.metterweather.data.repository.MapImagesRepository
+import io.github.tychomagnetic.metterweather.data.util.MapImagesUtils
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,8 +22,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
+import java.util.LinkedHashMap
 
 data class MapImagesUiState(
     val isLoadingCatalog: Boolean = true,
@@ -60,7 +63,10 @@ class MapImagesViewModel(application: Application) : AndroidViewModel(applicatio
     private var imageJob: Job? = null
     private var preloadJob: Job? = null
     private var catalogJob: Job? = null
-    private val bitmapCache = mutableMapOf<String, Bitmap>()
+    private val bitmapCache = object : LinkedHashMap<String, Bitmap>(MAX_BITMAP_CACHE_ENTRIES, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean =
+            size > MAX_BITMAP_CACHE_ENTRIES
+    }
     private val mapZone = ZoneId.of("Europe/London")
 
     fun onScreenEntered() {
@@ -112,7 +118,7 @@ class MapImagesViewModel(application: Application) : AndroidViewModel(applicatio
                     preloadDayContaining(lead)
                 }
                 .onFailure { error ->
-                    if (error is CancellationException) return@onFailure
+                    if (error is CancellationException) throw error
                     _uiState.update {
                         it.copy(
                             isLoadingCatalog = false,
@@ -181,7 +187,7 @@ class MapImagesViewModel(application: Application) : AndroidViewModel(applicatio
             _uiState.update { it.copy(isLoadingImage = true, errorMessage = null) }
             runCatching { repository.loadImage(key, state.selectedOrderId, frame.fileId) }
                 .onSuccess { bytes ->
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    val bitmap = decodeBitmap(bytes)
                     if (bitmap == null) {
                         _uiState.update { it.copy(isLoadingImage = false, errorMessage = "The downloaded map could not be decoded.") }
                     } else {
@@ -190,7 +196,7 @@ class MapImagesViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
                 .onFailure { error ->
-                    if (error is CancellationException) return@onFailure
+                    if (error is CancellationException) throw error
                     _uiState.update {
                         it.copy(isLoadingImage = false, errorMessage = error.localizedMessage ?: "Unable to download map image.")
                     }
@@ -245,7 +251,7 @@ class MapImagesViewModel(application: Application) : AndroidViewModel(applicatio
                     semaphore.withPermit {
                         runCatching {
                             val bytes = repository.loadImage(key, state.selectedOrderId, frame.fileId)
-                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            decodeBitmap(bytes)
                                 ?: error("Map frame could not be decoded")
                         }.fold(
                             onSuccess = { bitmap -> Result.success(Triple(frame, cacheKey, bitmap)) },
@@ -288,6 +294,11 @@ class MapImagesViewModel(application: Application) : AndroidViewModel(applicatio
         Instant.parse(runDateTime).plusSeconds(leadTime * 3600L).atZone(mapZone).toLocalDate()
     }.getOrNull()
 
+    private suspend fun decodeBitmap(bytes: ByteArray): Bitmap? =
+        withContext(Dispatchers.Default) {
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        }
+
     private fun cacheKey(state: MapImagesUiState, layerId: String, leadTime: Int): String =
         "${state.selectedOrderId}|${state.runDateTime}|$layerId|$leadTime"
 
@@ -297,5 +308,9 @@ class MapImagesViewModel(application: Application) : AndroidViewModel(applicatio
         "temperature_at_surface" -> 2
         "mean_sea_level_pressure" -> 3
         else -> 10
+    }
+
+    companion object {
+        private const val MAX_BITMAP_CACHE_ENTRIES = 48
     }
 }

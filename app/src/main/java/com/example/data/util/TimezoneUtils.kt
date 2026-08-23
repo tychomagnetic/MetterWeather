@@ -1,6 +1,6 @@
-package com.example.data.util
+package io.github.tychomagnetic.metterweather.data.util
 
-import com.example.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -400,9 +400,10 @@ object TimezoneUtils {
             val gamma = 2.0 * Math.PI / 365.0 * (dayOfYear - 1 + (12.0 - 12.0) / 24.0)
             val eqtime = 229.18 * (0.000075 + 0.001868 * Math.cos(gamma) - 0.032077 * Math.sin(gamma)
                     - 0.014615 * Math.cos(2 * gamma) - 0.040849 * Math.sin(2 * gamma))
-            val decl = 0.006918 - 0.399912 * Math.cos(gamma) + 0.070257 * Math.sin(gamma)
-                    - 0.006758 * Math.cos(2 * gamma) + 0.000907 * Math.sin(2 * gamma)
-                    - 0.002697 * Math.cos(3 * gamma) + 0.00148 * Math.sin(3 * gamma)
+            val decl =
+                0.006918 - 0.399912 * Math.cos(gamma) + 0.070257 * Math.sin(gamma) -
+                    0.006758 * Math.cos(2 * gamma) + 0.000907 * Math.sin(2 * gamma) -
+                    0.002697 * Math.cos(3 * gamma) + 0.00148 * Math.sin(3 * gamma)
 
             val latRad = Math.toRadians(lat)
             val zenithRad = Math.toRadians(90.833) // Standard solar zenith accounting for atmospheric refraction

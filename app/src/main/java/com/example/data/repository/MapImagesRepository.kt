@@ -1,28 +1,23 @@
-package com.example.data.repository
+package io.github.tychomagnetic.metterweather.data.repository
 
 import android.content.Context
-import com.example.data.local.PreferencesManager
-import com.example.data.model.MapCatalogResult
-import com.example.data.model.MapManifestCache
-import com.example.data.model.MapOrder
-import com.example.data.remote.MetOfficeMapImagesApiService
-import com.example.data.util.MapImagesUtils
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
+import io.github.tychomagnetic.metterweather.data.model.MapCatalogResult
+import io.github.tychomagnetic.metterweather.data.model.MapManifestCache
+import io.github.tychomagnetic.metterweather.data.model.MapOrder
+import io.github.tychomagnetic.metterweather.data.remote.MetOfficeMapImagesApiService
+import io.github.tychomagnetic.metterweather.data.remote.ApiServiceProvider
+import io.github.tychomagnetic.metterweather.data.util.MapImagesUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import retrofit2.Retrofit
-import retrofit2.converter.moshi.MoshiConverterFactory
 import java.io.File
-import java.util.concurrent.TimeUnit
 
 class MapImagesRepository(
     context: Context,
     private val preferences: PreferencesManager,
-    private val api: MetOfficeMapImagesApiService = createApi(),
+    private val api: MetOfficeMapImagesApiService = ApiServiceProvider.mapImagesApi,
     private val nowMillis: () -> Long = System::currentTimeMillis
 ) {
     private val imageCacheDirectory = File(context.cacheDir, "map-images").apply { mkdirs() }
@@ -103,19 +98,31 @@ class MapImagesRepository(
     }
 
     suspend fun loadImage(apiKey: String, orderId: String, fileId: String): ByteArray = withContext(Dispatchers.IO) {
-        val safeName = fileId.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        val cacheFile = File(imageCacheDirectory, "${orderId}_${safeName}_land_legend.png")
-        if (cacheFile.isFile && cacheFile.length() > 0) return@withContext cacheFile.readBytes()
+        val safeOrderId = sanitizeCacheComponent(orderId)
+        val safeFileId = sanitizeCacheComponent(fileId)
+        val cacheFile = File(imageCacheDirectory, "${safeOrderId}_${safeFileId}_land_legend.png")
+        if (cacheFile.isFile && cacheFile.length() in 1..MAX_IMAGE_BYTES) {
+            val cachedBytes = cacheFile.readBytes()
+            if (cachedBytes.hasPrefix(PNG_SIGNATURE)) return@withContext cachedBytes
+            cacheFile.delete()
+        } else if (cacheFile.exists()) {
+            cacheFile.delete()
+        }
 
         var attempt = 0
         while (true) {
             val response = api.getImage(orderId, fileId, apiKey = apiKey.trim())
             if (response.isSuccessful) {
-                val bytes = response.body()?.bytes() ?: error("Map image response was empty.")
-                if (bytes.size < 8 || bytes[0] != 0x89.toByte() || bytes[1] != 0x50.toByte()) {
+                val body = response.body() ?: error("Map image response was empty.")
+                if (body.contentLength() > MAX_IMAGE_BYTES) {
+                    error("Map image response was too large.")
+                }
+                val bytes = body.bytes()
+                if (bytes.size > MAX_IMAGE_BYTES || !bytes.hasPrefix(PNG_SIGNATURE)) {
                     error("Map image response was not a PNG.")
                 }
                 cacheFile.writeBytes(bytes)
+                trimImageCache()
                 return@withContext bytes
             }
 
@@ -141,22 +148,32 @@ class MapImagesRepository(
     private fun MapOrder.isCompatiblePngOrder(): Boolean =
         format.equals("PNG", ignoreCase = true) && orderId.isNotBlank()
 
+    private fun sanitizeCacheComponent(value: String): String =
+        value.replace(Regex("[^A-Za-z0-9._-]"), "_").take(MAX_CACHE_COMPONENT_LENGTH).ifBlank { "map" }
+
+    private fun ByteArray.hasPrefix(prefix: ByteArray): Boolean =
+        size >= prefix.size && prefix.indices.all { index -> this[index] == prefix[index] }
+
+    private fun trimImageCache() {
+        val files = imageCacheDirectory.listFiles().orEmpty().filter { it.isFile }
+        var totalBytes = files.sumOf { it.length() }
+        if (totalBytes <= MAX_IMAGE_CACHE_BYTES) return
+
+        files.sortedBy { it.lastModified() }.forEach { file ->
+            if (totalBytes <= MAX_IMAGE_CACHE_BYTES) return@forEach
+            val length = file.length()
+            if (file.delete()) totalBytes -= length
+        }
+    }
+
     companion object {
         private const val MAX_IMAGE_RETRIES = 2
+        private const val MAX_IMAGE_BYTES = 10 * 1024 * 1024L
+        private const val MAX_IMAGE_CACHE_BYTES = 100 * 1024 * 1024L
+        private const val MAX_CACHE_COMPONENT_LENGTH = 160
+        private val PNG_SIGNATURE = byteArrayOf(
+            0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+        )
 
-        private fun createApi(): MetOfficeMapImagesApiService {
-            val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
-            val client = OkHttpClient.Builder()
-                .followRedirects(true)
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build()
-            return Retrofit.Builder()
-                .baseUrl(MetOfficeMapImagesApiService.BASE_URL)
-                .client(client)
-                .addConverterFactory(MoshiConverterFactory.create(moshi))
-                .build()
-                .create(MetOfficeMapImagesApiService::class.java)
-        }
     }
 }

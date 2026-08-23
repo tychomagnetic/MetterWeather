@@ -1,4 +1,4 @@
-package com.example.data.model
+package io.github.tychomagnetic.metterweather.data.model
 
 data class MapOrdersResponse(
     val orders: List<MapOrder> = emptyList()

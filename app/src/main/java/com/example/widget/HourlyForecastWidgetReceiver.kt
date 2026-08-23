@@ -1,4 +1,4 @@
-package com.example.widget
+package io.github.tychomagnetic.metterweather.widget
 
 import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidget
@@ -10,5 +10,10 @@ class HourlyForecastWidgetReceiver : GlanceAppWidgetReceiver() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         WidgetRefreshManager.scheduleAutoRefresh(context.applicationContext)
+    }
+
+    override fun onDisabled(context: Context) {
+        WidgetRefreshManager.cancelAutoRefresh(context.applicationContext)
+        super.onDisabled(context)
     }
 }

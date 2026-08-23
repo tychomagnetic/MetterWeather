@@ -1,4 +1,4 @@
-package com.example.ui.components
+package io.github.tychomagnetic.metterweather.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -43,22 +43,22 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.DailyForecastItem
-import com.example.data.model.HourlyForecastItem
-import com.example.data.model.LocationItem
-import com.example.data.model.TemperatureUnit
-import com.example.data.model.WindSpeedUnit
-import com.example.data.util.TimezoneUtils
-import com.example.ui.theme.BentoBorder
-import com.example.ui.theme.BentoCardWhite
-import com.example.ui.theme.BentoHero
-import com.example.ui.theme.BentoHeroText
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.BentoTile
-import com.example.ui.theme.RainCyan
-import com.example.ui.theme.SolarGold
+import io.github.tychomagnetic.metterweather.data.model.DailyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.HourlyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.TemperatureUnit
+import io.github.tychomagnetic.metterweather.data.model.WindSpeedUnit
+import io.github.tychomagnetic.metterweather.data.util.TimezoneUtils
+import io.github.tychomagnetic.metterweather.ui.theme.BentoBorder
+import io.github.tychomagnetic.metterweather.ui.theme.BentoCardWhite
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHero
+import io.github.tychomagnetic.metterweather.ui.theme.BentoHeroText
+import io.github.tychomagnetic.metterweather.ui.theme.BentoPurplePrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextPrimary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
+import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
+import io.github.tychomagnetic.metterweather.ui.theme.RainCyan
+import io.github.tychomagnetic.metterweather.ui.theme.SolarGold
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -99,33 +99,13 @@ fun HourlyForecastRow(
                     localDateFromTime(it.fullTime, location) == targetDate
                 }
 
-                val dayHours: List<HourlyForecastItem> = if (matched.size >= 24) {
+                // Do not invent values for gaps in an otherwise valid feed. A
+                // three-hour forecast should remain three-hourly, and DST days
+                // can legitimately contain 23 or 25 local hours. Only fall back
+                // to a synthetic day when the source supplied no hourly data at
+                // all for that date.
+                val dayHours: List<HourlyForecastItem> = if (matched.isNotEmpty()) {
                     matched
-                } else if (matched.isNotEmpty()) {
-                    // Fill any missing hours to make a continuous 24h day
-                    val hourMap = matched.associateBy { item ->
-                        extractHourFromTime(item.fullTime, location)
-                    }
-                    (0..23).map { h ->
-                        hourMap[h] ?: run {
-                            val precedingThreeHourlySample = (1..2)
-                                .firstNotNullOfOrNull { offset -> hourMap[h - offset] }
-                            val synthetic = createSyntheticHourItem(dayItem, targetDate, h, location)
-                            precedingThreeHourlySample?.let { source ->
-                                synthetic.copy(
-                                    temperatureCelsius = source.temperatureCelsius,
-                                    feelsLikeCelsius = source.feelsLikeCelsius,
-                                    weatherCode = source.weatherCode,
-                                    precipitationChance = source.precipitationChance,
-                                    windSpeedMph = source.windSpeedMph,
-                                    windDirectionDegrees = source.windDirectionDegrees,
-                                    humidityPercent = source.humidityPercent,
-                                    uvIndex = source.uvIndex,
-                                    pressureHpa = source.pressureHpa
-                                )
-                            } ?: synthetic
-                        }
-                    }
                 } else {
                     (0..23).map { h ->
                         createSyntheticHourItem(dayItem, targetDate, h, location)

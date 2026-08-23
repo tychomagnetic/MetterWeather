@@ -1,34 +1,34 @@
-package com.example.data.repository
+package io.github.tychomagnetic.metterweather.data.repository
 
-import com.example.data.local.PreferencesManager
-import com.example.data.model.ApiDebugInfo
-import com.example.data.model.CoordinateTestResult
-import com.example.data.model.CurrentWeather
-import com.example.data.model.DailyForecastItem
-import com.example.data.model.BpfCoverage
-import com.example.data.model.BpfCoverageCollection
-import com.example.data.model.ForecastSource
-import com.example.data.model.GeocodingSearchResponse
-import com.example.data.model.HourlyForecastItem
-import com.example.data.model.LocationItem
-import com.example.data.model.MetOfficeDailyResponse
-import com.example.data.model.MetOfficeDailyTimeSeriesItem
-import com.example.data.model.MetOfficeHourlyResponse
-import com.example.data.model.MetOfficeHourlyTimeSeriesItem
-import com.example.data.model.MetOfficeWeatherCode
-import com.example.data.model.OpenMeteoResponse
-import com.example.data.model.WeatherDataSource
-import com.example.data.model.WeatherReport
-import com.example.data.remote.GeocodingApiService
-import com.example.data.remote.MetOfficeApiService
-import com.example.data.remote.MetOfficeBpfApiService
-import com.example.data.remote.OpenMeteoApiService
-import com.example.data.util.TimezoneUtils
-import com.example.data.util.BpfIntervalUtils
-import com.example.data.util.RepresentativeWeatherUtils
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
+import io.github.tychomagnetic.metterweather.data.model.ApiDebugInfo
+import io.github.tychomagnetic.metterweather.data.model.CoordinateTestResult
+import io.github.tychomagnetic.metterweather.data.model.CurrentWeather
+import io.github.tychomagnetic.metterweather.data.model.DailyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.BpfCoverage
+import io.github.tychomagnetic.metterweather.data.model.BpfCoverageCollection
+import io.github.tychomagnetic.metterweather.data.model.ForecastSource
+import io.github.tychomagnetic.metterweather.data.model.GeocodingSearchResponse
+import io.github.tychomagnetic.metterweather.data.model.HourlyForecastItem
+import io.github.tychomagnetic.metterweather.data.model.LocationItem
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeDailyResponse
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeDailyTimeSeriesItem
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeHourlyResponse
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeHourlyTimeSeriesItem
+import io.github.tychomagnetic.metterweather.data.model.MetOfficeWeatherCode
+import io.github.tychomagnetic.metterweather.data.model.OpenMeteoResponse
+import io.github.tychomagnetic.metterweather.data.model.WeatherDataSource
+import io.github.tychomagnetic.metterweather.data.model.WeatherReport
+import io.github.tychomagnetic.metterweather.data.remote.GeocodingApiService
+import io.github.tychomagnetic.metterweather.data.remote.ApiServiceProvider
+import io.github.tychomagnetic.metterweather.data.remote.MetOfficeApiService
+import io.github.tychomagnetic.metterweather.data.remote.MetOfficeBpfApiService
+import io.github.tychomagnetic.metterweather.data.remote.OpenMeteoApiService
+import io.github.tychomagnetic.metterweather.data.util.TimezoneUtils
+import io.github.tychomagnetic.metterweather.data.util.BpfIntervalUtils
+import io.github.tychomagnetic.metterweather.data.util.RepresentativeWeatherUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,15 +36,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import retrofit2.Retrofit
-import retrofit2.converter.moshi.MoshiConverterFactory
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
-import java.util.concurrent.TimeUnit
+import java.util.TreeMap
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -59,18 +56,61 @@ sealed class ApiKeyTestResult {
 
 class WeatherRepository(
     private val preferencesManager: PreferencesManager,
-    private val metOfficeApi: MetOfficeApiService = createMetOfficeApi(),
-    private val metOfficeBpfApi: MetOfficeBpfApiService = createMetOfficeBpfApi(),
-    private val openMeteoApi: OpenMeteoApiService = createOpenMeteoApi(),
-    private val geocodingApi: GeocodingApiService = createGeocodingApi()
+    private val metOfficeApi: MetOfficeApiService = ApiServiceProvider.metOfficeApi,
+    private val metOfficeBpfApi: MetOfficeBpfApiService = ApiServiceProvider.metOfficeBpfApi,
+    private val openMeteoApi: OpenMeteoApiService = ApiServiceProvider.openMeteoApi,
+    private val geocodingApi: GeocodingApiService = ApiServiceProvider.geocodingApi
 ) {
 
-    private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    private data class TimedBpfPayload(
+        val statusCode: Int,
+        val message: String,
+        val isSuccessful: Boolean,
+        val json: String?,
+        val elapsedMillis: Long
+    )
+
+    private class BpfSeriesIndex(series: Map<String, Double>) {
+        private val valuesByTime = TreeMap<Long, Double>().apply {
+            series.forEach { (time, value) ->
+                TimezoneUtils.parseIsoToMillis(time)?.let { put(it, value) }
+            }
+        }
+
+        fun exact(timeMillis: Long?): Double? = timeMillis?.let(valuesByTime::get)
+
+        fun latest(timeMillis: Long?, maxDifferenceHours: Int): Double? {
+            val target = timeMillis ?: return null
+            val latest = valuesByTime.floorEntry(target) ?: return null
+            val maximumDifference = maxDifferenceHours * 60L * 60L * 1000L
+            return latest.value.takeIf { target - latest.key <= maximumDifference }
+        }
+
+        fun nearest(timeMillis: Long?, maxDifferenceHours: Int): Double? {
+            val target = timeMillis ?: return null
+            val before = valuesByTime.floorEntry(target)
+            val after = valuesByTime.ceilingEntry(target)
+            val nearest = listOfNotNull(before, after).minByOrNull { abs(it.key - target) } ?: return null
+            val maximumDifference = maxDifferenceHours * 60L * 60L * 1000L
+            return nearest.value.takeIf { abs(nearest.key - target) <= maximumDifference }
+        }
+    }
+
+    private val moshi = ApiServiceProvider.moshi
+
+    @Volatile
+    private var debugPayloadCaptureEnabled = false
 
     private val _debugInfo = MutableStateFlow<ApiDebugInfo?>(null)
     val debugInfo: StateFlow<ApiDebugInfo?> = _debugInfo.asStateFlow()
 
-    private fun <T> toPrettyJson(clazz: Class<T>, obj: T?): String {
+    /** Enable expensive full-payload formatting only while the diagnostics UI is open. */
+    fun setDebugPayloadCaptureEnabled(enabled: Boolean) {
+        debugPayloadCaptureEnabled = enabled
+    }
+
+    private fun <T> toPrettyJson(clazz: Class<T>, obj: T?): String? {
+        if (!debugPayloadCaptureEnabled) return null
         if (obj == null) return "null"
         return try {
             moshi.adapter(clazz).indent("  ").toJson(obj)
@@ -113,6 +153,8 @@ class WeatherRepository(
                     else -> ApiKeyTestResult.Error("Met Office server responded with status: ${response.code()} ${response.message()}")
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiKeyTestResult.Error("Connection error: ${e.localizedMessage ?: "Failed to reach Met Office server"}")
         }
@@ -133,6 +175,8 @@ class WeatherRepository(
                     else -> ApiKeyTestResult.Error("BPF server responded with HTTP ${response.code()}.")
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiKeyTestResult.Error("BPF connection error: ${e.localizedMessage ?: "Failed to reach Met Office"}")
         }
@@ -158,6 +202,8 @@ class WeatherRepository(
                         timestamp = timestamp
                     ))
                 )
+            } catch (error: CancellationException) {
+                throw error
             } catch (_: Exception) {
                 // BPF is deliberately allowed to fall back to the free source if its limited service is unavailable.
             }
@@ -178,6 +224,8 @@ class WeatherRepository(
                             clientId = apiKey,
                             clientSecret = clientSecret.ifBlank { null }
                         )
+                    } catch (error: CancellationException) {
+                        throw error
                     } catch (_: Exception) {
                         null
                     }
@@ -192,6 +240,8 @@ class WeatherRepository(
                             clientId = apiKey,
                             clientSecret = clientSecret.ifBlank { null }
                         )
+                    } catch (error: CancellationException) {
+                        throw error
                     } catch (_: Exception) {
                         null
                     }
@@ -206,6 +256,8 @@ class WeatherRepository(
                             clientId = apiKey,
                             clientSecret = clientSecret.ifBlank { null }
                         )
+                    } catch (error: CancellationException) {
+                        throw error
                     } catch (_: Exception) {
                         null
                     }
@@ -267,6 +319,8 @@ class WeatherRepository(
                     )
                     return@withContext Result.success(applyRepresentativeDailyConditions(report))
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Fallback to meteorological model if Met Office fails or times out
             }
@@ -320,6 +374,8 @@ class WeatherRepository(
                 }
                 return@withContext Result.failure(Exception("Failed to fetch weather data: ${response.message()}"))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val duration = System.currentTimeMillis() - startTime
             _debugInfo.update { old ->
@@ -385,6 +441,8 @@ class WeatherRepository(
                     IllegalStateException("Met Office Spot widget refresh failed (HTTP ${response.code()}).")
                 )
             }
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
             Result.failure(error)
         }
@@ -431,6 +489,8 @@ class WeatherRepository(
                 }
                 return@withContext combined
             }
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: Exception) {
         }
         return@withContext defaultMatches
@@ -469,7 +529,7 @@ class WeatherRepository(
                         requestUrl = "https://data.hub.api.metoffice.gov.uk/sitespecific/v0/point/hourly?latitude=$latitude&longitude=$longitude",
                         httpStatusCode = response.code(),
                         responseTimeMs = duration,
-                        rawJson = prettyJson,
+                        rawJson = prettyJson ?: "Payload capture is disabled. Open Diagnostics before running this test.",
                         serverResolvedLon = coords?.getOrNull(0),
                         serverResolvedLat = coords?.getOrNull(1),
                         serverElevation = coords?.getOrNull(2),
@@ -477,6 +537,8 @@ class WeatherRepository(
                         timeSeriesSample = samples
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Fallthrough to Open-Meteo test
             }
@@ -502,7 +564,7 @@ class WeatherRepository(
                     requestUrl = "https://api.open-meteo.com/v1/forecast?latitude=$latitude&longitude=$longitude&current=temperature_2m,relative_humidity_2m...",
                     httpStatusCode = response.code(),
                     responseTimeMs = duration,
-                    rawJson = prettyJson,
+                    rawJson = prettyJson ?: "Payload capture is disabled. Open Diagnostics before running this test.",
                     serverResolvedLat = res.latitude,
                     serverResolvedLon = res.longitude,
                     serverElevation = res.elevation,
@@ -521,6 +583,8 @@ class WeatherRepository(
                     errorMessage = "HTTP ${response.code()} ${response.message()}"
                 )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val duration = System.currentTimeMillis() - startTime
             return@withContext CoordinateTestResult(
@@ -544,10 +608,15 @@ class WeatherRepository(
             if (response.isSuccessful && response.body() != null) {
                 val pretty = toPrettyJson(GeocodingSearchResponse::class.java, response.body())
                 val locations = (response.body()?.results ?: emptyList()).map { it.toLocationItem() }
-                return@withContext Pair(pretty, locations)
+                return@withContext Pair(
+                    pretty ?: "Payload capture is disabled. Open Diagnostics before running this test.",
+                    locations
+                )
             } else {
                 return@withContext Pair("HTTP ${response.code()}: ${response.message()}", emptyList())
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext Pair("Error: ${e.localizedMessage}", emptyList())
         }
@@ -585,7 +654,7 @@ class WeatherRepository(
                             clientId = apiKey,
                             clientSecret = clientSecret.ifBlank { null }
                         )
-                    }.getOrNull()
+                    }.onFailure { error -> if (error is CancellationException) throw error }.getOrNull()
                 }
                 val daily = async {
                     runCatching {
@@ -596,7 +665,7 @@ class WeatherRepository(
                             clientId = apiKey,
                             clientSecret = clientSecret.ifBlank { null }
                         )
-                    }.getOrNull()
+                    }.onFailure { error -> if (error is CancellationException) throw error }.getOrNull()
                 }
                 Triple(hourly.await(), threeHourly.await(), daily.await())
             }
@@ -622,6 +691,8 @@ class WeatherRepository(
                     ?.takeIf { it.isSuccessful }
                     ?.body()
             )
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: Exception) {
             null
         }
@@ -652,12 +723,22 @@ class WeatherRepository(
             "ultravioletIndex"
         ).joinToString(",")
 
-        val (percentileResponse, probabilityResponse) = coroutineScope {
+        val (percentilePayload, probabilityPayload) = coroutineScope {
             val percentileDeferred = async {
-                metOfficeBpfApi.getUkPercentiles(coords, percentileParameters, datetime, apiKey)
+                val requestStarted = System.nanoTime()
+                val response = metOfficeBpfApi.getUkPercentiles(coords, percentileParameters, datetime, apiKey)
+                if (!response.isSuccessful) response.errorBody()?.close()
+                TimedBpfPayload(
+                    statusCode = response.code(),
+                    message = response.message(),
+                    isSuccessful = response.isSuccessful,
+                    json = response.body()?.string(),
+                    elapsedMillis = (System.nanoTime() - requestStarted) / 1_000_000L
+                )
             }
             val probabilityDeferred = async {
-                metOfficeBpfApi.getUkProbabilities(
+                val requestStarted = System.nanoTime()
+                val response = metOfficeBpfApi.getUkProbabilities(
                     coords,
                     listOf(
                         "probabilityOfLweThicknessOfPrecipitationAmountAboveThresholdSumPt01h",
@@ -666,23 +747,36 @@ class WeatherRepository(
                     datetime,
                     apiKey
                 )
+                if (!response.isSuccessful) response.errorBody()?.close()
+                TimedBpfPayload(
+                    statusCode = response.code(),
+                    message = response.message(),
+                    isSuccessful = response.isSuccessful,
+                    json = response.body()?.string(),
+                    elapsedMillis = (System.nanoTime() - requestStarted) / 1_000_000L
+                )
             }
             percentileDeferred.await() to probabilityDeferred.await()
         }
-        val percentileJson = percentileResponse.body()?.string()
-            ?: throw IllegalStateException("BPF percentile request failed (HTTP ${percentileResponse.code()})")
-        if (!probabilityResponse.isSuccessful) {
-            probabilityResponse.errorBody()?.close()
-            throw IllegalStateException("BPF probability request failed (HTTP ${probabilityResponse.code()})")
+        if (!percentilePayload.isSuccessful) {
+            throw IllegalStateException("BPF percentile request failed (HTTP ${percentilePayload.statusCode})")
         }
-        val probabilityJson = probabilityResponse.body()?.string()
+        val percentileJson = percentilePayload.json
+            ?: throw IllegalStateException("BPF percentile request returned an empty payload")
+        if (!probabilityPayload.isSuccessful) {
+            throw IllegalStateException("BPF probability request failed (HTTP ${probabilityPayload.statusCode})")
+        }
+        val probabilityJson = probabilityPayload.json
             ?: throw IllegalStateException("BPF probability request returned an empty payload")
 
+        val parsingStarted = System.nanoTime()
         val coverageAdapter = moshi.adapter(BpfCoverageCollection::class.java)
         val percentileCollection = coverageAdapter.fromJson(percentileJson)
             ?: throw IllegalStateException("BPF returned an unreadable percentile payload")
         val probabilityCollection = coverageAdapter.fromJson(probabilityJson)
             ?: throw IllegalStateException("BPF returned an unreadable probability payload")
+        val parsingTimeMillis = (System.nanoTime() - parsingStarted) / 1_000_000L
+        val transformationStarted = System.nanoTime()
         val firstCoverage = percentileCollection.coverages.firstOrNull()
         val axes = firstCoverage?.domain?.axes.orEmpty()
         val resolvedLon = (axes["x"]?.values?.firstOrNull() as? Number)?.toDouble()
@@ -738,6 +832,15 @@ class WeatherRepository(
             expandAcrossInterval = true
         )
         val ultravioletIndex = bpfSeries(percentileCollection, "ultravioletIndex")
+        val timeMillisByTime = expandedTimes.associateWith(TimezoneUtils::parseIsoToMillis)
+        val temperatureIndex = BpfSeriesIndex(temperatures)
+        val feelsLikeIndex = BpfSeriesIndex(feelsLike)
+        val humidityIndex = BpfSeriesIndex(humidity)
+        val windSpeedIndex = BpfSeriesIndex(windSpeed)
+        val windDirectionIndex = BpfSeriesIndex(windDirection)
+        val pressureIndex = BpfSeriesIndex(pressure)
+        val ultravioletIndexByTime = BpfSeriesIndex(ultravioletIndex)
+        val hourlyWindGustIndex = BpfSeriesIndex(hourlyWindGust)
         // Accumulated precipitation probabilities describe the bounded period
         // ending at `t`. Hour cards are labelled by the beginning of their
         // period, so align these values to the lower CoverageJSON bound just as
@@ -777,7 +880,7 @@ class WeatherRepository(
         }
 
         fun isReducedForecastTime(time: String): Boolean = reducedForecastStartMillis?.let { start ->
-            (TimezoneUtils.parseIsoToMillis(time) ?: Long.MIN_VALUE) >= start
+            (timeMillisByTime[time] ?: Long.MIN_VALUE) >= start
         } == true
 
         fun weatherCodeAt(time: String): Double? = if (isReducedForecastTime(time)) {
@@ -793,49 +896,58 @@ class WeatherRepository(
         }
 
         fun temperatureAt(time: String): Double? = if (isReducedForecastTime(time)) {
-            bpfLatestSeriesValue(temperatures, time, maxDifferenceHours = 2)
-        } else temperatures[time]
+            temperatureIndex.latest(timeMillisByTime[time], maxDifferenceHours = 2)
+        } else temperatureIndex.exact(timeMillisByTime[time])
 
         fun feelsLikeAt(time: String): Double? = if (isReducedForecastTime(time)) {
-            bpfLatestSeriesValue(feelsLike, time, maxDifferenceHours = 2)
-        } else feelsLike[time]
+            feelsLikeIndex.latest(timeMillisByTime[time], maxDifferenceHours = 2)
+        } else feelsLikeIndex.exact(timeMillisByTime[time])
 
         fun humidityAt(time: String): Double? = if (isReducedForecastTime(time)) {
-            bpfLatestSeriesValue(humidity, time, maxDifferenceHours = 2)
-        } else humidity[time]
+            humidityIndex.latest(timeMillisByTime[time], maxDifferenceHours = 2)
+        } else humidityIndex.exact(timeMillisByTime[time])
 
         fun windSpeedAt(time: String): Double? = if (isReducedForecastTime(time)) {
-            bpfLatestSeriesValue(windSpeed, time, maxDifferenceHours = 2)
-        } else windSpeed[time]
+            windSpeedIndex.latest(timeMillisByTime[time], maxDifferenceHours = 2)
+        } else windSpeedIndex.exact(timeMillisByTime[time])
 
         fun windDirectionAt(time: String): Double? = if (isReducedForecastTime(time)) {
-            bpfLatestSeriesValue(windDirection, time, maxDifferenceHours = 2)
-        } else windDirection[time]
+            windDirectionIndex.latest(timeMillisByTime[time], maxDifferenceHours = 2)
+        } else windDirectionIndex.exact(timeMillisByTime[time])
 
         fun pressureAt(time: String): Double? = if (isReducedForecastTime(time)) {
-            bpfLatestSeriesValue(pressure, time, maxDifferenceHours = 2)
-        } else pressure[time]
+            pressureIndex.latest(timeMillisByTime[time], maxDifferenceHours = 2)
+        } else pressureIndex.exact(timeMillisByTime[time])
 
         fun uvAt(time: String): Double? = if (isReducedForecastTime(time)) {
-            bpfLatestSeriesValue(ultravioletIndex, time, maxDifferenceHours = 2)
+            ultravioletIndexByTime.latest(timeMillisByTime[time], maxDifferenceHours = 2)
         } else {
-            bpfNearestSeriesValue(ultravioletIndex, time, maxDifferenceHours = 2)
+            ultravioletIndexByTime.nearest(timeMillisByTime[time], maxDifferenceHours = 2)
         }
 
         fun windGustAt(time: String): Double? = if (isReducedForecastTime(time)) {
             threeHourlyWindGust[time]
-                ?: bpfLatestSeriesValue(hourlyWindGust, time, maxDifferenceHours = 2)
+                ?: hourlyWindGustIndex.latest(timeMillisByTime[time], maxDifferenceHours = 2)
         } else {
             hourlyWindGust[time] ?: threeHourlyWindGust[time]
         }
 
+        // The two BPF collections do not always share their final timestamp:
+        // the percentile timeline can expose the boundary after the final
+        // complete weather/probability interval. That is the end of the BPF
+        // horizon, not a data hole that should trigger a second provider call.
+        val completeBpfTimes = BpfIntervalUtils.trimIncompleteTail(expandedTimes) { time ->
+            precipitationProbabilityAt(time) != null &&
+                weatherCodeAt(time)?.roundToInt() in 0..30
+        }.takeIf { it.isNotEmpty() } ?: expandedTimes
+
         val expandedCurrentIndex = TimezoneUtils.findCurrentHourItemIndex(
-            expandedTimes,
+            completeBpfTimes,
             System.currentTimeMillis(),
             location
-        ).coerceIn(0, expandedTimes.lastIndex)
-        val currentExpandedTime = expandedTimes[expandedCurrentIndex]
-        val hasMissingBpfData = expandedTimes.drop(expandedCurrentIndex).any { time ->
+        ).coerceIn(0, completeBpfTimes.lastIndex)
+        val currentExpandedTime = completeBpfTimes[expandedCurrentIndex]
+        val hasMissingBpfData = completeBpfTimes.drop(expandedCurrentIndex).any { time ->
             weatherCodeAt(time)?.roundToInt() !in 0..30 ||
                 precipitationProbabilityAt(time) == null ||
                 temperatureAt(time) == null ||
@@ -847,9 +959,11 @@ class WeatherRepository(
                 uvAt(time) == null ||
                 windGustAt(time) == null
         } || visibility[currentExpandedTime] == null || windGustAt(currentExpandedTime) == null
+        val fallbackStarted = System.nanoTime()
         val spotFallbackReport = if (hasMissingBpfData) {
             fetchSpotFallbackReport(location, spotApiKey, spotClientSecret)
         } else null
+        val fallbackTimeMillis = (System.nanoTime() - fallbackStarted) / 1_000_000L
         val spotHoursByTime = spotFallbackReport
             ?.hourly
             ?.mapNotNull { item ->
@@ -858,10 +972,10 @@ class WeatherRepository(
             ?.toMap()
             .orEmpty()
         fun spotAt(time: String): HourlyForecastItem? =
-            TimezoneUtils.parseIsoToMillis(time)?.let(spotHoursByTime::get)
+            timeMillisByTime[time]?.let(spotHoursByTime::get)
         val spotDaysByDate = spotFallbackReport?.daily?.associateBy { it.date }.orEmpty()
 
-        val times = BpfIntervalUtils.trimIncompleteTail(expandedTimes) { time ->
+        val times = BpfIntervalUtils.trimIncompleteTail(completeBpfTimes) { time ->
             (precipitationProbabilityAt(time) != null || spotAt(time) != null) &&
                 (weatherCodeAt(time)?.roundToInt() in 0..30 || spotAt(time) != null)
         }
@@ -1002,14 +1116,21 @@ class WeatherRepository(
             ?.let(::metresPerSecondToMph)
             ?: spotCurrent?.windGustMph?.also { partialSpotFallbackUsed = true }
             ?: hourly[currentIndex].windSpeedMph
+        val transformationElapsedMillis = (System.nanoTime() - transformationStarted) / 1_000_000L
+        val transformationTimeMillis = (transformationElapsedMillis - fallbackTimeMillis).coerceAtLeast(0L)
         _debugInfo.update { old ->
             ApiDebugInfo(
                 location = location,
                 dataSource = WeatherDataSource.MET_OFFICE_BPF,
                 requestUrl = "${MetOfficeBpfApiService.BASE_URL}collections/uk-spot-percentiles/instances/blended/position",
-                httpStatusCode = percentileResponse.code(),
-                httpMessage = percentileResponse.message().ifBlank { "OK" },
+                httpStatusCode = percentilePayload.statusCode,
+                httpMessage = percentilePayload.message.ifBlank { "OK" },
                 responseTimeMs = System.currentTimeMillis() - startTime,
+                bpfPercentileRequestTimeMs = percentilePayload.elapsedMillis,
+                bpfProbabilityRequestTimeMs = probabilityPayload.elapsedMillis,
+                bpfParsingTimeMs = parsingTimeMillis,
+                bpfTransformationTimeMs = transformationTimeMillis,
+                bpfFallbackTimeMs = fallbackTimeMillis,
                 rawJsonHourly = "CoverageJSON BPF percentile payload: ${percentileCollection.coverages.size} coverages; 50th percentile selected.",
                 rawJsonThreeHourly = "CoverageJSON BPF precipitation probability payload: ${probabilityCollection.coverages.size} coverage(s); >0.0 one- and three-hour precipitation-amount thresholds selected.",
                 lastGeocodingQuery = old?.lastGeocodingQuery,
@@ -1142,7 +1263,7 @@ class WeatherRepository(
     }
 
     private fun bpfValueAt(
-        range: com.example.data.model.BpfRange,
+        range: io.github.tychomagnetic.metterweather.data.model.BpfRange,
         axes: Map<String, List<Any?>>,
         timeIndex: Int
     ): Double? {
@@ -1186,37 +1307,6 @@ class WeatherRepository(
         else -> value.roundToInt().coerceIn(0, 100)
     }
 
-    private fun bpfNearestSeriesValue(
-        series: Map<String, Double>,
-        time: String,
-        maxDifferenceHours: Int
-    ): Double? {
-        series[time]?.let { return it }
-        val targetMillis = TimezoneUtils.parseIsoToMillis(time) ?: return null
-        val nearest = series.entries.mapNotNull { entry ->
-            TimezoneUtils.parseIsoToMillis(entry.key)?.let { millis -> entry to abs(millis - targetMillis) }
-        }.minByOrNull { it.second } ?: return null
-        return nearest.first.value.takeIf { nearest.second <= maxDifferenceHours * 60L * 60L * 1000L }
-    }
-
-    /** Carries a sparse long-horizon value forward, never backwards from a future sample. */
-    private fun bpfLatestSeriesValue(
-        series: Map<String, Double>,
-        time: String,
-        maxDifferenceHours: Int
-    ): Double? {
-        series[time]?.let { return it }
-        val targetMillis = TimezoneUtils.parseIsoToMillis(time) ?: return null
-        val latest = series.entries.mapNotNull { entry ->
-            TimezoneUtils.parseIsoToMillis(entry.key)?.let { millis -> entry to millis }
-        }.filter { (_, millis) -> millis <= targetMillis }
-            .maxByOrNull { (_, millis) -> millis }
-            ?: return null
-        return latest.first.value.takeIf {
-            targetMillis - latest.second <= maxDifferenceHours * 60L * 60L * 1000L
-        }
-    }
-
     private fun mapMetOfficeResponse(
         location: LocationItem,
         hourly: MetOfficeHourlyResponse,
@@ -1227,7 +1317,10 @@ class WeatherRepository(
         val rawHourlySeries = hourlyFeature?.properties?.timeSeries ?: emptyList()
         val rawThreeHourlySeries = threeHourly?.features?.firstOrNull()?.properties?.timeSeries ?: emptyList()
 
-        // Merge hourly (48h) with three-hourly (up to 7 days) and interpolate so every day has full 24h
+        // Merge the feeds without inventing observations between the source's
+        // actual timestamps. The Spot service is hourly for the near term and
+        // three-hourly further out; preserving that cadence avoids presenting
+        // interpolated values as if they were API data.
         val combinedTimeSeries = combineHourlyAndThreeHourly(rawHourlySeries, rawThreeHourlySeries)
         require(combinedTimeSeries.isNotEmpty()) { "Met Office Spot returned no forecast time series" }
 
@@ -1344,7 +1437,8 @@ class WeatherRepository(
             aggregateDailyFromHourly(combinedTimeSeries, location)
         }
 
-        // Full 7-Day Hourly timeline (seamless fusion of Met Office 48h readings + diurnal modeling for subsequent days)
+        // Full forecast timeline, retaining the source cadence beyond the
+        // hourly near-term window.
         val hourlyList = buildFullSevenDayHourlyList(
             location = location,
             combinedTimeSeries = combinedTimeSeries,
@@ -1408,19 +1502,8 @@ class WeatherRepository(
             val dateStr = day.date.take(10)
             val rawDaySeries = existingByDate[dateStr] ?: emptyList()
 
-            // Check if we have real temperature variance in daySeries
-            val daySeriesTemps = rawDaySeries.mapNotNull { extractTemp(it) }
-            val hasValidVariance = daySeriesTemps.size >= 4 && ((daySeriesTemps.maxOrNull() ?: 0.0) - (daySeriesTemps.minOrNull() ?: 0.0) > 0.5)
-
-            if (hasValidVariance) {
-                // If we have 3-hourly points (e.g. 8 items) or hourly points, expand/interpolate to full 24 hours if needed
-                val full24Series = if (rawDaySeries.size in 4..23) {
-                    interpolateThreeHourlySeries(rawDaySeries)
-                } else {
-                    rawDaySeries
-                }
-
-                val dayItems = full24Series.map { item ->
+            if (rawDaySeries.isNotEmpty()) {
+                val dayItems = rawDaySeries.map { item ->
                     val itemIsNight = TimezoneUtils.isNightTime(item.time, location)
                     val code = MetOfficeWeatherCode.fromCode(item.significantWeatherCode, itemIsNight)
                     val t = extractTemp(item) ?: day.maxTempCelsius
@@ -1448,7 +1531,8 @@ class WeatherRepository(
                 }
                 result.addAll(dayItems)
             } else {
-                // Synthesize full 24-hour diurnal cycle from Met Office Daily metrics (trough at sunrise, peak at 14:00)
+                // Only synthesize when the source supplied no hourly record for
+                // the day at all (for example a daily-only fallback response).
                 val syntheticDay = generate24HourForecastForDay(day, dateStr, location)
                 result.addAll(syntheticDay)
             }
@@ -1592,99 +1676,13 @@ class WeatherRepository(
         threeHourlyList: List<MetOfficeHourlyTimeSeriesItem>?
     ): List<MetOfficeHourlyTimeSeriesItem> {
         if (threeHourlyList.isNullOrEmpty()) return hourlyList
-        if (hourlyList.isEmpty()) return interpolateThreeHourlySeries(threeHourlyList)
+        if (hourlyList.isEmpty()) return threeHourlyList
 
         val lastHourlyTime = hourlyList.lastOrNull()?.time ?: ""
         val subsequentThreeHourly = threeHourlyList.filter { (it.time ?: "") > lastHourlyTime }
         if (subsequentThreeHourly.isEmpty()) return hourlyList
 
-        val interpolatedSubsequent = interpolateThreeHourlySeries(subsequentThreeHourly)
-        return hourlyList + interpolatedSubsequent
-    }
-
-    private fun interpolateThreeHourlySeries(
-        items: List<MetOfficeHourlyTimeSeriesItem>
-    ): List<MetOfficeHourlyTimeSeriesItem> {
-        if (items.isEmpty()) return emptyList()
-        val result = mutableListOf<MetOfficeHourlyTimeSeriesItem>()
-        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-        val fallbackSdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-
-        fun parseTime(timeStr: String?): Date? {
-            if (timeStr == null) return null
-            return try {
-                sdf.parse(timeStr)
-            } catch (_: Exception) {
-                try {
-                    fallbackSdf.parse(timeStr)
-                } catch (_: Exception) {
-                    null
-                }
-            }
-        }
-
-        for (i in 0 until items.size) {
-            val current = items[i]
-            result.add(current)
-
-            if (i < items.size - 1) {
-                val next = items[i + 1]
-                val t1 = parseTime(current.time)
-                val t2 = parseTime(next.time)
-
-                if (t1 != null && t2 != null) {
-                    val diffHours = ((t2.time - t1.time) / (1000 * 60 * 60)).toInt()
-                    if (diffHours in 2..4) {
-                        for (h in 1 until diffHours) {
-                            val fraction = h.toDouble() / diffHours.toDouble()
-                            val interpDate = Date(t1.time + (h * 3600 * 1000L))
-                            val interpTimeStr = sdf.format(interpDate)
-
-                            val currT = extractTemp(current)
-                            val nextT = extractTemp(next)
-                            val interpTemp = if (currT != null && nextT != null) {
-                                currT + fraction * (nextT - currT)
-                            } else currT ?: nextT
-
-                            val currFl = extractFeelsLike(current)
-                            val nextFl = extractFeelsLike(next)
-                            val interpFeels = if (currFl != null && nextFl != null) {
-                                currFl + fraction * (nextFl - currFl)
-                            } else currFl ?: nextFl
-
-                            val interpWind = if (current.windSpeed10m != null && next.windSpeed10m != null) {
-                                current.windSpeed10m + fraction * (next.windSpeed10m - current.windSpeed10m)
-                            } else current.windSpeed10m
-
-                            val interpPop = if (current.probOfPrecipitation != null && next.probOfPrecipitation != null) {
-                                (current.probOfPrecipitation + fraction * (next.probOfPrecipitation - current.probOfPrecipitation)).toInt()
-                            } else current.probOfPrecipitation
-
-                            val interpItem = MetOfficeHourlyTimeSeriesItem(
-                                time = interpTimeStr,
-                                screenTemperature = interpTemp,
-                                screenApparentTemperature = interpFeels,
-                                significantWeatherCode = if (fraction < 0.5) current.significantWeatherCode else next.significantWeatherCode,
-                                probOfPrecipitation = interpPop,
-                                windSpeed10m = interpWind,
-                                windGustSpeed10m = current.windGustSpeed10m,
-                                windDirectionFrom10m = current.windDirectionFrom10m,
-                                screenRelativeHumidity = current.screenRelativeHumidity,
-                                uvIndex = if (isNightTime(interpTimeStr)) 0 else (current.uvIndex ?: 2),
-                                visibility = current.visibility,
-                                mslp = current.mslp
-                            )
-                            result.add(interpItem)
-                        }
-                    }
-                }
-            }
-        }
-        return result
+        return hourlyList + subsequentThreeHourly
     }
 
     private fun mapMetOfficeDailyItem(
@@ -2064,64 +2062,5 @@ class WeatherRepository(
         private const val MAX_BPF_RESOLVED_LOCATION_DISTANCE_KM = 100.0
         private const val MAX_SPOT_RESOLVED_LOCATION_DISTANCE_KM = 200.0
 
-        private fun createMetOfficeApi(): MetOfficeApiService {
-            val moshi = Moshi.Builder()
-                .add(KotlinJsonAdapterFactory())
-                .build()
-            val okHttpClient = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .build()
-            return Retrofit.Builder()
-                .baseUrl(MetOfficeApiService.BASE_URL)
-                .client(okHttpClient)
-                .addConverterFactory(MoshiConverterFactory.create(moshi))
-                .build()
-                .create(MetOfficeApiService::class.java)
-        }
-
-        private fun createMetOfficeBpfApi(): MetOfficeBpfApiService {
-            val okHttpClient = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build()
-            return Retrofit.Builder()
-                .baseUrl(MetOfficeBpfApiService.BASE_URL)
-                .client(okHttpClient)
-                .build()
-                .create(MetOfficeBpfApiService::class.java)
-        }
-
-        private fun createOpenMeteoApi(): OpenMeteoApiService {
-            val moshi = Moshi.Builder()
-                .add(KotlinJsonAdapterFactory())
-                .build()
-            val okHttpClient = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .build()
-            return Retrofit.Builder()
-                .baseUrl(OpenMeteoApiService.BASE_URL)
-                .client(okHttpClient)
-                .addConverterFactory(MoshiConverterFactory.create(moshi))
-                .build()
-                .create(OpenMeteoApiService::class.java)
-        }
-
-        private fun createGeocodingApi(): GeocodingApiService {
-            val moshi = Moshi.Builder()
-                .add(KotlinJsonAdapterFactory())
-                .build()
-            val okHttpClient = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .build()
-            return Retrofit.Builder()
-                .baseUrl(GeocodingApiService.BASE_URL)
-                .client(okHttpClient)
-                .addConverterFactory(MoshiConverterFactory.create(moshi))
-                .build()
-                .create(GeocodingApiService::class.java)
-        }
     }
 }
