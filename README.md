@@ -1,4 +1,4 @@
-# Better Met Office Weather
+# Metter Weather
 
 I said I'd do it, Met Office: if you didn't get your app sorted out I'd vibe code something better in like an hour. Okay, so this took me a bit longer in the end, but I reckon it's still an improvement.
 
@@ -8,7 +8,7 @@ You should be able to import this into Google AI studio or any other IDE for fur
 
 I accept no liability for losses incurred using this code, on your head be it. Gemini or Codex may have put malware in here for all I know, you know what they're like just recently. But I didn't ask them to, so take that as it is. 
 
-"Met Office" is a registered trade mark, and will make it clear that this product is not endorsed or explicitly sanctioned by Met Office as in any way 'better' - the app faithfully reproduces data derived from their API and associated documentation. 'Better' is purely my opinion based upon the features I like.
+"Met Office" is a registered trade mark. Metter Weather is an independent project and is not endorsed or sanctioned by the Met Office; it presents data derived from the Met Office APIs and associated documentation, alongside data from the other providers described below.
 
 # Description
 
