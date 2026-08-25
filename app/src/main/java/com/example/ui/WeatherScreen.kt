@@ -484,7 +484,7 @@ fun WeatherScreen(
         if (uiState.isDebugSheetOpen) {
             ApiDebugSheet(
                 isOpen = uiState.isDebugSheetOpen,
-                debugInfo = uiState.debugInfo,
+                debugInfo = uiState.apiDiagnosticResults[uiState.selectedApiDiagnosticSource],
                 currentLocation = uiState.selectedLocation,
                 customLatInput = uiState.customLatInput,
                 customLonInput = uiState.customLonInput,
@@ -494,8 +494,11 @@ fun WeatherScreen(
                 rawGeocodingResultJson = uiState.rawGeocodingResultJson,
                 rawGeocodingLocations = uiState.rawGeocodingLocations,
                 isTestingGeocoding = uiState.isTestingGeocoding,
+                selectedDiagnosticSource = uiState.selectedApiDiagnosticSource,
+                isRunningDiagnostic = uiState.isRunningApiDiagnostic,
                 onClose = { viewModel.closeDebugSheet() },
-                onRefreshCurrent = { viewModel.loadWeather(isRefresh = true) },
+                onSelectDiagnosticSource = { viewModel.selectApiDiagnosticSource(it) },
+                onRunDiagnostic = { viewModel.runApiDiagnostic() },
                 onUpdateCustomLat = { viewModel.updateCustomLat(it) },
                 onUpdateCustomLon = { viewModel.updateCustomLon(it) },
                 onNudgeCoordinates = { latD, lonD -> viewModel.nudgeCoordinates(latD, lonD) },

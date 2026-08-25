@@ -1,6 +1,8 @@
 package io.github.tychomagnetic.metterweather.data.repository
 
+import android.util.Log
 import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
+import io.github.tychomagnetic.metterweather.data.model.ApiDiagnosticSource
 import io.github.tychomagnetic.metterweather.data.model.ApiDebugInfo
 import io.github.tychomagnetic.metterweather.data.model.CoordinateTestResult
 import io.github.tychomagnetic.metterweather.data.model.CurrentWeather
@@ -109,6 +111,229 @@ class WeatherRepository(
         debugPayloadCaptureEnabled = enabled
     }
 
+    /**
+     * Runs exactly the requested provider. This deliberately bypasses the normal
+     * BPF -> Spot -> Open-Meteo fallback chain so a later fallback cannot replace
+     * the response that the diagnostics screen was asked to inspect.
+     */
+    suspend fun runApiDiagnostic(
+        source: ApiDiagnosticSource,
+        location: LocationItem
+    ): ApiDebugInfo = withContext(Dispatchers.IO) {
+        val started = System.currentTimeMillis()
+        val timestamp = debugTimestamp()
+        logDiagnosticStart(source, location)
+
+        val result = when (source) {
+            ApiDiagnosticSource.MET_OFFICE_SPOT -> runSpotDiagnostic(location, started, timestamp)
+            ApiDiagnosticSource.MET_OFFICE_BPF -> runBpfDiagnostic(location, started, timestamp)
+            ApiDiagnosticSource.OPEN_METEO -> runOpenMeteoDiagnostic(location, started, timestamp)
+        }
+
+        if (result.errorDetails == null && result.httpStatusCode in 200..299) {
+            Log.i(LOG_TAG, "Diagnostic ${source.name} succeeded: HTTP ${result.httpStatusCode} in ${result.responseTimeMs}ms")
+        } else {
+            Log.w(LOG_TAG, "Diagnostic ${source.name} failed: HTTP ${result.httpStatusCode} after ${result.responseTimeMs}ms; ${result.errorDetails ?: result.httpMessage}")
+        }
+        result
+    }
+
+    private suspend fun runSpotDiagnostic(
+        location: LocationItem,
+        started: Long,
+        timestamp: String
+    ): ApiDebugInfo {
+        val apiKey = preferencesManager.getApiKey()
+        val clientSecret = preferencesManager.getClientSecret()
+        val requestUrl = spotRequestUrl(location)
+        if (apiKey.isBlank()) {
+            return diagnosticError(location, WeatherDataSource.MET_OFFICE_DATAHUB, requestUrl, started, timestamp, "No Met Office Spot API key is configured")
+        }
+
+        return try {
+            val (hourlyResponse, threeHourlyResponse, dailyResponse) = coroutineScope {
+                val hourly = async {
+                    metOfficeApi.getPointHourly(
+                        latitude = location.latitude,
+                        longitude = location.longitude,
+                        apiKey = apiKey,
+                        clientId = apiKey,
+                        clientSecret = clientSecret.ifBlank { null }
+                    )
+                }
+                val threeHourly = async {
+                    metOfficeApi.getPointThreeHourly(
+                        latitude = location.latitude,
+                        longitude = location.longitude,
+                        apiKey = apiKey,
+                        clientId = apiKey,
+                        clientSecret = clientSecret.ifBlank { null }
+                    )
+                }
+                val daily = async {
+                    metOfficeApi.getPointDaily(
+                        latitude = location.latitude,
+                        longitude = location.longitude,
+                        apiKey = apiKey,
+                        clientId = apiKey,
+                        clientSecret = clientSecret.ifBlank { null }
+                    )
+                }
+                Triple(hourly.await(), threeHourly.await(), daily.await())
+            }
+            val hourlyBody = hourlyResponse.body()
+            val feature = hourlyBody?.features?.firstOrNull()
+            val coordinates = feature?.geometry?.coordinates
+            val endpointSummary = "Hourly ${hourlyResponse.code()}; 3-hourly ${threeHourlyResponse.code()}; daily ${dailyResponse.code()}"
+            val error = when {
+                !hourlyResponse.isSuccessful -> "Hourly request failed: HTTP ${hourlyResponse.code()} ${hourlyResponse.message()}"
+                hourlyBody == null -> "Hourly request returned an empty response"
+                !threeHourlyResponse.isSuccessful -> "3-hourly request failed: HTTP ${threeHourlyResponse.code()} ${threeHourlyResponse.message()}"
+                !dailyResponse.isSuccessful -> "Daily request failed: HTTP ${dailyResponse.code()} ${dailyResponse.message()}"
+                else -> null
+            }
+            val diagnosticStatus = when {
+                !hourlyResponse.isSuccessful -> hourlyResponse.code()
+                hourlyBody == null -> 0
+                !threeHourlyResponse.isSuccessful -> threeHourlyResponse.code()
+                !dailyResponse.isSuccessful -> dailyResponse.code()
+                else -> hourlyResponse.code()
+            }
+            ApiDebugInfo(
+                location = location,
+                dataSource = WeatherDataSource.MET_OFFICE_DATAHUB,
+                requestUrl = requestUrl,
+                httpStatusCode = diagnosticStatus,
+                httpMessage = endpointSummary,
+                responseTimeMs = System.currentTimeMillis() - started,
+                rawJsonHourly = hourlyBody?.let { toPrettyJson(MetOfficeHourlyResponse::class.java, it) },
+                rawJsonThreeHourly = threeHourlyResponse.body()?.let { toPrettyJson(MetOfficeHourlyResponse::class.java, it) },
+                rawJsonDaily = dailyResponse.body()?.let { toPrettyJson(MetOfficeDailyResponse::class.java, it) },
+                serverResolvedLon = coordinates?.getOrNull(0),
+                serverResolvedLat = coordinates?.getOrNull(1),
+                serverResolvedName = feature?.properties?.location?.name,
+                errorDetails = error,
+                timestamp = timestamp
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            diagnosticError(location, WeatherDataSource.MET_OFFICE_DATAHUB, requestUrl, started, timestamp, safeError(error))
+        }
+    }
+
+    private suspend fun runBpfDiagnostic(
+        location: LocationItem,
+        started: Long,
+        timestamp: String
+    ): ApiDebugInfo {
+        val apiKey = preferencesManager.getBpfApiKey()
+        val requestUrl = "${MetOfficeBpfApiService.BASE_URL}collections/uk-spot-percentiles/instances/blended/position"
+        if (apiKey.isBlank()) {
+            return diagnosticError(location, WeatherDataSource.MET_OFFICE_BPF, requestUrl, started, timestamp, "No Met Office BPF API key is configured")
+        }
+
+        var captured: ApiDebugInfo? = null
+        return try {
+            // An empty Spot key is intentional: a BPF diagnostic must never make
+            // a hidden fallback request or mix another provider into its result.
+            fetchBpfWeatherReport(
+                location = location,
+                apiKey = apiKey,
+                spotApiKey = "",
+                spotClientSecret = "",
+                startTime = started,
+                timestamp = timestamp,
+                debugConsumer = { captured = it }
+            )
+            captured ?: diagnosticError(location, WeatherDataSource.MET_OFFICE_BPF, requestUrl, started, timestamp, "BPF completed without producing diagnostic metadata")
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            val message = safeError(error)
+            captured?.copy(
+                responseTimeMs = System.currentTimeMillis() - started,
+                errorDetails = message
+            ) ?: diagnosticError(
+                    location = location,
+                    dataSource = WeatherDataSource.MET_OFFICE_BPF,
+                    requestUrl = requestUrl,
+                    started = started,
+                    timestamp = timestamp,
+                    details = message,
+                    statusCode = HTTP_STATUS_REGEX.find(message)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                )
+        }
+    }
+
+    private suspend fun runOpenMeteoDiagnostic(
+        location: LocationItem,
+        started: Long,
+        timestamp: String
+    ): ApiDebugInfo {
+        val requestUrl = openMeteoRequestUrl(location)
+        return try {
+            val response = openMeteoApi.getForecast(location.latitude, location.longitude)
+            val body = response.body()
+            ApiDebugInfo(
+                location = location,
+                dataSource = WeatherDataSource.OPEN_METEO_METEOROLOGICAL,
+                requestUrl = requestUrl,
+                httpStatusCode = response.code(),
+                httpMessage = response.message().ifBlank { if (response.isSuccessful) "OK" else "Error" },
+                responseTimeMs = System.currentTimeMillis() - started,
+                rawJsonFallback = body?.let { toPrettyJson(OpenMeteoResponse::class.java, it) },
+                serverResolvedLat = body?.latitude,
+                serverResolvedLon = body?.longitude,
+                serverResolvedName = body?.let { "Elevation: ${it.elevation ?: 0.0}m (Timezone: ${it.timezone ?: "UTC"})" },
+                errorDetails = when {
+                    !response.isSuccessful -> "HTTP ${response.code()}: ${response.message()}"
+                    body == null -> "Open-Meteo returned an empty response"
+                    else -> null
+                },
+                timestamp = timestamp
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            diagnosticError(location, WeatherDataSource.OPEN_METEO_METEOROLOGICAL, requestUrl, started, timestamp, safeError(error))
+        }
+    }
+
+    private fun diagnosticError(
+        location: LocationItem,
+        dataSource: WeatherDataSource,
+        requestUrl: String,
+        started: Long,
+        timestamp: String,
+        details: String,
+        statusCode: Int = 0
+    ) = ApiDebugInfo(
+        location = location,
+        dataSource = dataSource,
+        requestUrl = requestUrl,
+        httpStatusCode = statusCode,
+        httpMessage = if (statusCode == 0) "Request failed" else "HTTP $statusCode",
+        responseTimeMs = System.currentTimeMillis() - started,
+        errorDetails = details,
+        timestamp = timestamp
+    )
+
+    private fun debugTimestamp(): String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+
+    private fun spotRequestUrl(location: LocationItem) =
+        "https://data.hub.api.metoffice.gov.uk/sitespecific/v0/point/hourly?latitude=${location.latitude}&longitude=${location.longitude}"
+
+    private fun openMeteoRequestUrl(location: LocationItem) =
+        "https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=${OpenMeteoApiService.CURRENT_PARAMETERS}&hourly=${OpenMeteoApiService.HOURLY_PARAMETERS}&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,uv_index_max,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max&timezone=auto&forecast_days=7&wind_speed_unit=mph"
+
+    private fun logDiagnosticStart(source: ApiDiagnosticSource, location: LocationItem) {
+        Log.i(LOG_TAG, "Diagnostic ${source.name} started for ${location.name} (${String.format(Locale.US, "%.3f", location.latitude)}, ${String.format(Locale.US, "%.3f", location.longitude)})")
+    }
+
+    private fun safeError(error: Exception): String =
+        "${error.javaClass.simpleName}: ${error.localizedMessage ?: "No error detail supplied"}"
+
     private fun <T> toPrettyJson(clazz: Class<T>, obj: T?): String? {
         if (!debugPayloadCaptureEnabled) return null
         if (obj == null) return "null"
@@ -191,9 +416,9 @@ class WeatherRepository(
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
 
         if (selectedSource == ForecastSource.MET_OFFICE_BPF && bpfApiKey.isNotBlank()) {
+            Log.i(LOG_TAG, "Forecast BPF request started for ${location.name}")
             try {
-                return@withContext Result.success(
-                    applyRepresentativeDailyConditions(fetchBpfWeatherReport(
+                val report = applyRepresentativeDailyConditions(fetchBpfWeatherReport(
                         location = location,
                         apiKey = bpfApiKey,
                         spotApiKey = apiKey,
@@ -201,10 +426,12 @@ class WeatherRepository(
                         startTime = startTime,
                         timestamp = timestamp
                     ))
-                )
+                Log.i(LOG_TAG, "Forecast BPF request succeeded for ${location.name} in ${System.currentTimeMillis() - startTime}ms")
+                return@withContext Result.success(report)
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                Log.w(LOG_TAG, "Forecast BPF request failed for ${location.name}; falling back to Spot: ${safeError(error)}")
                 // BPF is deliberately allowed to fall back to the free source if its limited service is unavailable.
             }
         }
@@ -213,6 +440,7 @@ class WeatherRepository(
         // outside BPF coverage and when the probabilistic service is unavailable.
         // Open-Meteo remains the final fallback if Spot is unavailable too.
         if (selectedSource != ForecastSource.OPEN_METEO && apiKey.isNotBlank()) {
+            Log.i(LOG_TAG, "Forecast Spot request started for ${location.name}")
             try {
                 // Fetch hourly, three-hourly, and daily concurrently from Met Office DataHub
                 val hourlyDeferred = async {
@@ -317,16 +545,20 @@ class WeatherRepository(
                         threeHourly = if (threeHourlyResponse != null && threeHourlyResponse.isSuccessful) threeHourlyBody else null,
                         daily = if (dailyResponse != null && dailyResponse.isSuccessful) dailyBody else null
                     )
+                    Log.i(LOG_TAG, "Forecast Spot request succeeded for ${location.name} in ${System.currentTimeMillis() - startTime}ms")
                     return@withContext Result.success(applyRepresentativeDailyConditions(report))
                 }
+                Log.w(LOG_TAG, "Forecast Spot request did not return a usable hourly response for ${location.name}; falling back to Open-Meteo (HTTP ${hourlyResponse?.code() ?: 0})")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                Log.w(LOG_TAG, "Forecast Spot request failed for ${location.name}; falling back to Open-Meteo: ${safeError(e)}")
                 // Fallback to meteorological model if Met Office fails or times out
             }
         }
 
         // Fallback or demo mode when no key or if key request failed
+        Log.i(LOG_TAG, "Forecast Open-Meteo request started for ${location.name}")
         try {
             val response = openMeteoApi.getForecast(
                 latitude = location.latitude,
@@ -356,6 +588,7 @@ class WeatherRepository(
                 }
 
                 val report = mapOpenMeteoResponse(location, res)
+                Log.i(LOG_TAG, "Forecast Open-Meteo request succeeded for ${location.name} in ${System.currentTimeMillis() - startTime}ms")
                 return@withContext Result.success(applyRepresentativeDailyConditions(report))
             } else {
                 _debugInfo.update { old ->
@@ -372,6 +605,7 @@ class WeatherRepository(
                         timestamp = timestamp
                     )
                 }
+                Log.w(LOG_TAG, "Forecast Open-Meteo returned HTTP ${response.code()} for ${location.name}")
                 return@withContext Result.failure(Exception("Failed to fetch weather data: ${response.message()}"))
             }
         } catch (e: CancellationException) {
@@ -392,6 +626,7 @@ class WeatherRepository(
                     timestamp = timestamp
                 )
             }
+            Log.e(LOG_TAG, "Forecast Open-Meteo request failed for ${location.name}: ${safeError(e)}")
             return@withContext Result.failure(e)
         }
     }
@@ -634,6 +869,7 @@ class WeatherRepository(
     ): WeatherReport? {
         if (apiKey.isBlank()) return null
 
+        Log.i(LOG_TAG, "BPF partial fallback: requesting Spot coverage for ${location.name}")
         return try {
             val (hourlyResponse, threeHourlyResponse, dailyResponse) = coroutineScope {
                 val hourly = async {
@@ -681,7 +917,7 @@ class WeatherRepository(
                 sourceName = "Met Office Spot",
                 maximumDistanceKm = MAX_SPOT_RESOLVED_LOCATION_DISTANCE_KM
             )
-            mapMetOfficeResponse(
+            val report = mapMetOfficeResponse(
                 location = location,
                 hourly = hourlyBody,
                 threeHourly = threeHourlyResponse
@@ -691,11 +927,105 @@ class WeatherRepository(
                     ?.takeIf { it.isSuccessful }
                     ?.body()
             )
+            val enrichedReport = enrichSpotFallbackTimeline(
+                report = report,
+                location = location,
+                hourlyBody = hourlyBody,
+                threeHourlyBody = threeHourlyResponse
+                    ?.takeIf { it.isSuccessful }
+                    ?.body()
+            )
+            Log.i(
+                LOG_TAG,
+                "BPF partial fallback: Spot supplied ${enrichedReport.hourly.size} aligned hours for ${location.name}"
+            )
+            enrichedReport
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.w(LOG_TAG, "BPF partial fallback: Spot could not be used for ${location.name}: ${safeError(error)}")
             null
         }
+    }
+
+    /**
+     * The normal Spot UI is calendar-day based and intentionally retains the
+     * provider's three-hour cadence. BPF merging is different: it needs a
+     * rolling timestamp lookup, including the partial eighth calendar date,
+     * and each PT03H record must cover all three hours of its validity window.
+     */
+    private fun enrichSpotFallbackTimeline(
+        report: WeatherReport,
+        location: LocationItem,
+        hourlyBody: MetOfficeHourlyResponse,
+        threeHourlyBody: MetOfficeHourlyResponse?
+    ): WeatherReport {
+        val rawHourly = hourlyBody.features
+            ?.firstOrNull()
+            ?.properties
+            ?.timeSeries
+            .orEmpty()
+        val rawThreeHourly = threeHourlyBody
+            ?.features
+            ?.firstOrNull()
+            ?.properties
+            ?.timeSeries
+            .orEmpty()
+
+        val expandedThreeHourly = rawThreeHourly.flatMap { item ->
+            val startMillis = TimezoneUtils.parseIsoToMillis(item.time) ?: return@flatMap emptyList()
+            (0 until 3).mapNotNull { offsetHours ->
+                mapSpotFallbackHour(
+                    item = item,
+                    timeMillis = startMillis + offsetHours * 60L * 60L * 1000L,
+                    location = location
+                )
+            }
+        }
+        val exactHourly = rawHourly.mapNotNull { item ->
+            val timeMillis = TimezoneUtils.parseIsoToMillis(item.time) ?: return@mapNotNull null
+            mapSpotFallbackHour(item, timeMillis, location)
+        }
+
+        // Insert broad three-hour coverage first, then let the normal mapped
+        // report and exact hourly feed replace it wherever finer data exists.
+        val byTime = linkedMapOf<Long, HourlyForecastItem>()
+        (expandedThreeHourly + report.hourly + exactHourly).forEach { item ->
+            TimezoneUtils.parseIsoToMillis(item.fullTime)?.let { byTime[it] = item }
+        }
+        return report.copy(hourly = byTime.toSortedMap().values.toList())
+    }
+
+    private fun mapSpotFallbackHour(
+        item: MetOfficeHourlyTimeSeriesItem,
+        timeMillis: Long,
+        location: LocationItem
+    ): HourlyForecastItem? {
+        val temperature = extractTemp(item) ?: return null
+        val fullTime = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(Date(timeMillis))
+        val isNight = TimezoneUtils.isNightTime(fullTime, location)
+        val pressure = when {
+            item.mslp != null && item.mslp > 50_000 -> item.mslp / 100.0
+            item.mslp != null -> item.mslp
+            else -> 1013.25
+        }
+        return HourlyForecastItem(
+            timeLabel = TimezoneUtils.formatHourLabel(fullTime, location, false),
+            fullTime = fullTime,
+            date = TimezoneUtils.getForecastLocalDate(fullTime, location),
+            temperatureCelsius = temperature,
+            feelsLikeCelsius = extractFeelsLike(item) ?: temperature,
+            weatherCode = MetOfficeWeatherCode.fromCode(item.significantWeatherCode, isNight),
+            precipitationChance = item.probOfPrecipitation ?: 0,
+            windSpeedMph = (item.windSpeed10m ?: 0.0) * 2.23694,
+            windDirectionDegrees = item.windDirectionFrom10m ?: 0,
+            humidityPercent = (item.screenRelativeHumidity ?: 65.0).roundToInt().coerceIn(0, 100),
+            uvIndex = item.uvIndex ?: 0,
+            pressureHpa = pressure,
+            isNow = false
+        )
     }
 
     private suspend fun fetchBpfWeatherReport(
@@ -704,7 +1034,8 @@ class WeatherRepository(
         spotApiKey: String,
         spotClientSecret: String,
         startTime: Long,
-        timestamp: String
+        timestamp: String,
+        debugConsumer: ((ApiDebugInfo) -> Unit)? = null
     ): WeatherReport {
         val coords = "POINT(${location.longitude} ${location.latitude})"
         val datetime = bpfDateTimeRange()
@@ -758,6 +1089,10 @@ class WeatherRepository(
             }
             percentileDeferred.await() to probabilityDeferred.await()
         }
+        Log.i(
+            LOG_TAG,
+            "BPF responses for ${location.name}: percentiles HTTP ${percentilePayload.statusCode} in ${percentilePayload.elapsedMillis}ms; probabilities HTTP ${probabilityPayload.statusCode} in ${probabilityPayload.elapsedMillis}ms"
+        )
         if (!percentilePayload.isSuccessful) {
             throw IllegalStateException("BPF percentile request failed (HTTP ${percentilePayload.statusCode})")
         }
@@ -776,12 +1111,45 @@ class WeatherRepository(
         val probabilityCollection = coverageAdapter.fromJson(probabilityJson)
             ?: throw IllegalStateException("BPF returned an unreadable probability payload")
         val parsingTimeMillis = (System.nanoTime() - parsingStarted) / 1_000_000L
+        Log.i(
+            LOG_TAG,
+            "BPF payloads parsed for ${location.name} in ${parsingTimeMillis}ms (${percentileCollection.coverages.size} percentile coverages, ${probabilityCollection.coverages.size} probability coverages)"
+        )
         val transformationStarted = System.nanoTime()
         val firstCoverage = percentileCollection.coverages.firstOrNull()
         val axes = firstCoverage?.domain?.axes.orEmpty()
         val resolvedLon = (axes["x"]?.values?.firstOrNull() as? Number)?.toDouble()
         val resolvedLat = (axes["y"]?.values?.firstOrNull() as? Number)?.toDouble()
         val locationId = axes["locationId"]?.values?.firstOrNull()?.toString()
+        val debugPercentilePayload = if (debugPayloadCaptureEnabled) {
+            coverageAdapter.indent("  ").toJson(percentileCollection)
+        } else {
+            "CoverageJSON BPF percentile payload: ${percentileCollection.coverages.size} coverages; 50th percentile selected."
+        }
+        val debugProbabilityPayload = if (debugPayloadCaptureEnabled) {
+            coverageAdapter.indent("  ").toJson(probabilityCollection)
+        } else {
+            "CoverageJSON BPF precipitation probability payload: ${probabilityCollection.coverages.size} coverage(s); >0.0 one- and three-hour precipitation-amount thresholds selected."
+        }
+        debugConsumer?.invoke(
+            ApiDebugInfo(
+                location = location,
+                dataSource = WeatherDataSource.MET_OFFICE_BPF,
+                requestUrl = "${MetOfficeBpfApiService.BASE_URL}collections/uk-spot-percentiles/instances/blended/position",
+                httpStatusCode = percentilePayload.statusCode,
+                httpMessage = "Percentiles HTTP ${percentilePayload.statusCode}; probabilities HTTP ${probabilityPayload.statusCode}",
+                responseTimeMs = System.currentTimeMillis() - startTime,
+                bpfPercentileRequestTimeMs = percentilePayload.elapsedMillis,
+                bpfProbabilityRequestTimeMs = probabilityPayload.elapsedMillis,
+                bpfParsingTimeMs = parsingTimeMillis,
+                rawJsonHourly = debugPercentilePayload,
+                rawJsonThreeHourly = debugProbabilityPayload,
+                serverResolvedLat = resolvedLat,
+                serverResolvedLon = resolvedLon,
+                serverResolvedName = locationId?.let { "BPF grid point $it" },
+                timestamp = timestamp
+            )
+        )
 
         requireResolvedLocationMatchesRequest(
             requested = location,
@@ -932,22 +1300,13 @@ class WeatherRepository(
             hourlyWindGust[time] ?: threeHourlyWindGust[time]
         }
 
-        // The two BPF collections do not always share their final timestamp:
-        // the percentile timeline can expose the boundary after the final
-        // complete weather/probability interval. That is the end of the BPF
-        // horizon, not a data hole that should trigger a second provider call.
-        val completeBpfTimes = BpfIntervalUtils.trimIncompleteTail(expandedTimes) { time ->
-            precipitationProbabilityAt(time) != null &&
-                weatherCodeAt(time)?.roundToInt() in 0..30
-        }.takeIf { it.isNotEmpty() } ?: expandedTimes
-
         val expandedCurrentIndex = TimezoneUtils.findCurrentHourItemIndex(
-            completeBpfTimes,
+            expandedTimes,
             System.currentTimeMillis(),
             location
-        ).coerceIn(0, completeBpfTimes.lastIndex)
-        val currentExpandedTime = completeBpfTimes[expandedCurrentIndex]
-        val hasMissingBpfData = completeBpfTimes.drop(expandedCurrentIndex).any { time ->
+        ).coerceIn(0, expandedTimes.lastIndex)
+        val currentExpandedTime = expandedTimes[expandedCurrentIndex]
+        val hasMissingBpfData = expandedTimes.drop(expandedCurrentIndex).any { time ->
             weatherCodeAt(time)?.roundToInt() !in 0..30 ||
                 precipitationProbabilityAt(time) == null ||
                 temperatureAt(time) == null ||
@@ -975,7 +1334,11 @@ class WeatherRepository(
             timeMillisByTime[time]?.let(spotHoursByTime::get)
         val spotDaysByDate = spotFallbackReport?.daily?.associateBy { it.date }.orEmpty()
 
-        val times = BpfIntervalUtils.trimIncompleteTail(completeBpfTimes) { time ->
+        // Only trim a terminal timestamp after both providers have been
+        // considered. Previously the BPF-only tail was discarded before Spot
+        // could fill it, while internal gaps on a partial eighth calendar date
+        // survived and then invalidated the entire BPF forecast.
+        val times = BpfIntervalUtils.trimIncompleteTail(expandedTimes) { time ->
             (precipitationProbabilityAt(time) != null || spotAt(time) != null) &&
                 (weatherCodeAt(time)?.roundToInt() in 0..30 || spotAt(time) != null)
         }
@@ -1118,29 +1481,32 @@ class WeatherRepository(
             ?: hourly[currentIndex].windSpeedMph
         val transformationElapsedMillis = (System.nanoTime() - transformationStarted) / 1_000_000L
         val transformationTimeMillis = (transformationElapsedMillis - fallbackTimeMillis).coerceAtLeast(0L)
-        _debugInfo.update { old ->
-            ApiDebugInfo(
+        val bpfDebugInfo = ApiDebugInfo(
                 location = location,
                 dataSource = WeatherDataSource.MET_OFFICE_BPF,
                 requestUrl = "${MetOfficeBpfApiService.BASE_URL}collections/uk-spot-percentiles/instances/blended/position",
                 httpStatusCode = percentilePayload.statusCode,
-                httpMessage = percentilePayload.message.ifBlank { "OK" },
+                httpMessage = "Percentiles HTTP ${percentilePayload.statusCode}; probabilities HTTP ${probabilityPayload.statusCode}",
                 responseTimeMs = System.currentTimeMillis() - startTime,
                 bpfPercentileRequestTimeMs = percentilePayload.elapsedMillis,
                 bpfProbabilityRequestTimeMs = probabilityPayload.elapsedMillis,
                 bpfParsingTimeMs = parsingTimeMillis,
                 bpfTransformationTimeMs = transformationTimeMillis,
                 bpfFallbackTimeMs = fallbackTimeMillis,
-                rawJsonHourly = "CoverageJSON BPF percentile payload: ${percentileCollection.coverages.size} coverages; 50th percentile selected.",
-                rawJsonThreeHourly = "CoverageJSON BPF precipitation probability payload: ${probabilityCollection.coverages.size} coverage(s); >0.0 one- and three-hour precipitation-amount thresholds selected.",
-                lastGeocodingQuery = old?.lastGeocodingQuery,
-                rawJsonGeocoding = old?.rawJsonGeocoding,
+                rawJsonHourly = debugPercentilePayload,
+                rawJsonThreeHourly = debugProbabilityPayload,
                 serverResolvedLat = resolvedLat,
                 serverResolvedLon = resolvedLon,
                 serverResolvedName = locationId?.let { "BPF grid point $it" },
                 timestamp = timestamp
             )
+        _debugInfo.update { old ->
+            bpfDebugInfo.copy(
+                lastGeocodingQuery = old?.lastGeocodingQuery,
+                rawJsonGeocoding = old?.rawJsonGeocoding
+            )
         }
+        debugConsumer?.invoke(bpfDebugInfo)
 
         return WeatherReport(
             location = location,
@@ -2055,6 +2421,8 @@ class WeatherRepository(
     }
 
     companion object {
+        private const val LOG_TAG = "WeatherRepository"
+        private val HTTP_STATUS_REGEX = Regex("HTTP\\s+(\\d{3})", RegexOption.IGNORE_CASE)
         private const val EARTH_RADIUS_KM = 6371.0
         // BPF's UK collection is comparatively dense. Global Spot, however,
         // resolves to one of a much sparser worldwide set of named sites; its

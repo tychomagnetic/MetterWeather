@@ -41,7 +41,6 @@ import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sensors
@@ -80,6 +79,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.tychomagnetic.metterweather.data.model.ApiDebugInfo
+import io.github.tychomagnetic.metterweather.data.model.ApiDiagnosticSource
 import io.github.tychomagnetic.metterweather.data.model.CoordinateTestResult
 import io.github.tychomagnetic.metterweather.data.model.LocationItem
 import io.github.tychomagnetic.metterweather.data.model.WeatherDataSource
@@ -113,8 +113,11 @@ fun ApiDebugSheet(
     rawGeocodingResultJson: String?,
     rawGeocodingLocations: List<LocationItem>,
     isTestingGeocoding: Boolean,
+    selectedDiagnosticSource: ApiDiagnosticSource,
+    isRunningDiagnostic: Boolean,
     onClose: () -> Unit,
-    onRefreshCurrent: () -> Unit,
+    onSelectDiagnosticSource: (ApiDiagnosticSource) -> Unit,
+    onRunDiagnostic: () -> Unit,
     onUpdateCustomLat: (String) -> Unit,
     onUpdateCustomLon: (String) -> Unit,
     onNudgeCoordinates: (Double, Double) -> Unit,
@@ -184,23 +187,6 @@ fun ApiDebugSheet(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = onRefreshCurrent,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(BentoCardWhite)
-                            .border(1.dp, BentoBorder.copy(alpha = 0.5f), CircleShape)
-                            .testTag("debug_refresh_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh Forecast",
-                            tint = BentoPurplePrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    IconButton(
                         onClick = onClose,
                         modifier = Modifier
                             .size(36.dp)
@@ -221,10 +207,108 @@ fun ApiDebugSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            Text(
+                text = "Source to inspect",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = BentoTextPrimary
+                )
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ApiDiagnosticSource.entries.forEach { source ->
+                    val selected = source == selectedDiagnosticSource
+                    Surface(
+                        onClick = {
+                            if (!isRunningDiagnostic) {
+                                selectedJsonSubTab = 0
+                                onSelectDiagnosticSource(source)
+                            }
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (selected) BentoPurplePrimary else BentoCardWhite,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (selected) BentoPurplePrimary else BentoBorder.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = when (source) {
+                                ApiDiagnosticSource.MET_OFFICE_SPOT -> "Spot"
+                                ApiDiagnosticSource.MET_OFFICE_BPF -> "BPF"
+                                ApiDiagnosticSource.OPEN_METEO -> "Open-Meteo"
+                            },
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selected) BentoOnPrimary else BentoTextPrimary
+                            ),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 9.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                onClick = { if (!isRunningDiagnostic) onRunDiagnostic() },
+                shape = RoundedCornerShape(12.dp),
+                color = BentoHero,
+                border = androidx.compose.foundation.BorderStroke(1.dp, BentoBorder.copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth().testTag("run_source_diagnostic")
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(vertical = 9.dp)
+                ) {
+                    if (isRunningDiagnostic) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = BentoPurplePrimary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = BentoPurplePrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isRunningDiagnostic) {
+                            "Testing ${selectedDiagnosticSource.displayName}…"
+                        } else {
+                            "Test ${selectedDiagnosticSource.displayName}${if (selectedDiagnosticSource == ApiDiagnosticSource.MET_OFFICE_BPF) " (2 API calls)" else ""}"
+                        },
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = BentoTextPrimary
+                        )
+                    )
+                }
+            }
+
+            if (debugInfo == null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "No ${selectedDiagnosticSource.displayName} diagnostic has been run in this session.",
+                    style = MaterialTheme.typography.bodySmall.copy(color = BentoTextSecondary)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             // Current Location & Status Header Card
             LocationSummaryCard(
                 location = currentLocation,
                 debugInfo = debugInfo,
+                selectedDiagnosticSource = selectedDiagnosticSource,
                 onCopyUrl = {
                     val url = debugInfo?.requestUrl ?: ""
                     copyToClipboard(context, "API URL", url)
@@ -271,6 +355,7 @@ fun ApiDebugSheet(
             when (selectedTabIndex) {
                 0 -> RawJsonViewerTab(
                     debugInfo = debugInfo,
+                    selectedDiagnosticSource = selectedDiagnosticSource,
                     selectedSubTab = selectedJsonSubTab,
                     onSelectSubTab = { selectedJsonSubTab = it },
                     filterText = jsonSearchFilter,
@@ -318,6 +403,7 @@ fun ApiDebugSheet(
 private fun LocationSummaryCard(
     location: LocationItem,
     debugInfo: ApiDebugInfo?,
+    selectedDiagnosticSource: ApiDiagnosticSource,
     onCopyUrl: () -> Unit
 ) {
     Surface(
@@ -349,8 +435,11 @@ private fun LocationSummaryCard(
                     )
                 }
 
-                val isBpf = debugInfo?.dataSource == WeatherDataSource.MET_OFFICE_BPF
-                val isMetOfficeSource = debugInfo?.dataSource == WeatherDataSource.MET_OFFICE_DATAHUB || isBpf
+                val isBpf = debugInfo?.dataSource == WeatherDataSource.MET_OFFICE_BPF ||
+                    (debugInfo == null && selectedDiagnosticSource == ApiDiagnosticSource.MET_OFFICE_BPF)
+                val isSpot = debugInfo?.dataSource == WeatherDataSource.MET_OFFICE_DATAHUB ||
+                    (debugInfo == null && selectedDiagnosticSource == ApiDiagnosticSource.MET_OFFICE_SPOT)
+                val isMetOfficeSource = isSpot || isBpf
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = if (isMetOfficeSource) MetterSuccessContainer else BentoHero
@@ -358,7 +447,7 @@ private fun LocationSummaryCard(
                     Text(
                         text = when {
                             isBpf -> "Met Office BPF"
-                            isMetOfficeSource -> "Met Office DataHub"
+                            isSpot -> "Met Office Spot"
                             else -> "Open-Meteo Model"
                         },
                         style = MaterialTheme.typography.labelSmall.copy(
@@ -389,24 +478,37 @@ private fun LocationSummaryCard(
                 )
 
                 if (debugInfo != null) {
+                    val isSuccessful = debugInfo.httpStatusCode in 200..299 && debugInfo.errorDetails == null
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
                                 .size(7.dp)
                                 .clip(CircleShape)
-                                .background(if (debugInfo.httpStatusCode == 200) Color(0xFF4CAF50) else Color(0xFFE53935))
+                                .background(if (isSuccessful) Color(0xFF4CAF50) else Color(0xFFE53935))
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "HTTP ${debugInfo.httpStatusCode} (${debugInfo.responseTimeMs}ms)",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (debugInfo.httpStatusCode == 200) MetterSuccessContent else MetterErrorContent,
+                                color = if (isSuccessful) MetterSuccessContent else MetterErrorContent,
                                 fontSize = 10.5.sp
                             )
                         )
                     }
                 }
+            }
+
+            debugInfo?.let { result ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = result.errorDetails ?: result.httpMessage,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        color = if (result.errorDetails == null) BentoTextSecondary else MetterErrorContent,
+                        fontSize = 10.sp
+                    )
+                )
             }
 
             debugInfo?.takeIf { it.bpfPercentileRequestTimeMs != null }?.let { bpfDebug ->
@@ -446,14 +548,18 @@ private fun LocationSummaryCard(
 @Composable
 private fun RawJsonViewerTab(
     debugInfo: ApiDebugInfo?,
+    selectedDiagnosticSource: ApiDiagnosticSource,
     selectedSubTab: Int,
     onSelectSubTab: (Int) -> Unit,
     filterText: String,
     onFilterChange: (String) -> Unit,
     onCopyJson: (String) -> Unit
 ) {
-    val isBpf = debugInfo?.dataSource == WeatherDataSource.MET_OFFICE_BPF
-    val isMetOffice = debugInfo?.dataSource == WeatherDataSource.MET_OFFICE_DATAHUB || isBpf
+    val isBpf = debugInfo?.dataSource == WeatherDataSource.MET_OFFICE_BPF ||
+        (debugInfo == null && selectedDiagnosticSource == ApiDiagnosticSource.MET_OFFICE_BPF)
+    val isSpot = debugInfo?.dataSource == WeatherDataSource.MET_OFFICE_DATAHUB ||
+        (debugInfo == null && selectedDiagnosticSource == ApiDiagnosticSource.MET_OFFICE_SPOT)
+    val isMetOffice = isSpot || isBpf
 
     val rawJson = when {
         isBpf -> when (selectedSubTab) {

@@ -2,6 +2,12 @@ package io.github.tychomagnetic.metterweather.data.model
 
 import com.squareup.moshi.JsonClass
 
+enum class ApiDiagnosticSource(val displayName: String) {
+    MET_OFFICE_SPOT("Met Office Spot"),
+    MET_OFFICE_BPF("Met Office BPF"),
+    OPEN_METEO("Open-Meteo")
+}
+
 @JsonClass(generateAdapter = true)
 data class ApiDebugInfo(
     val location: LocationItem,

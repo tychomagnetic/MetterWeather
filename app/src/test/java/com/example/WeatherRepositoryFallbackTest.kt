@@ -3,6 +3,7 @@ package io.github.tychomagnetic.metterweather
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
+import io.github.tychomagnetic.metterweather.data.model.ApiDiagnosticSource
 import io.github.tychomagnetic.metterweather.data.model.ForecastSource
 import io.github.tychomagnetic.metterweather.data.model.LocationItem
 import io.github.tychomagnetic.metterweather.data.model.MetOfficeGeometry
@@ -37,6 +38,38 @@ import retrofit2.Response
 class WeatherRepositoryFallbackTest {
 
     @Test
+    fun `BPF diagnostic never follows the forecast fallback chain`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.getSharedPreferences("met_office_weather_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
+        val prefs = PreferencesManager(context).apply {
+            setBpfApiKey("bpf-test-key")
+            setApiKey("spot-test-key")
+        }
+        val spotApi = SuccessfulSpotApi()
+        val openApi = RecordingOpenMeteoApi()
+        val repository = WeatherRepository(
+            preferencesManager = prefs,
+            metOfficeApi = spotApi,
+            metOfficeBpfApi = FailingBpfApi(),
+            openMeteoApi = openApi
+        )
+
+        val result = repository.runApiDiagnostic(
+            ApiDiagnosticSource.MET_OFFICE_BPF,
+            LocationItem.DEFAULT_LOCATIONS.first()
+        )
+
+        assertEquals(WeatherDataSource.MET_OFFICE_BPF, result.dataSource)
+        assertEquals(404, result.httpStatusCode)
+        assertTrue(result.errorDetails?.contains("BPF percentile request failed") == true)
+        assertFalse(spotApi.hourlyRequested)
+        assertFalse(openApi.requested)
+    }
+
+    @Test
     fun `isolated BPF hole is filled from Spot without replacing BPF report`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.getSharedPreferences("met_office_weather_prefs", Context.MODE_PRIVATE)
@@ -64,6 +97,40 @@ class WeatherRepositoryFallbackTest {
         assertEquals(7, report.hourly.single().weatherCode.code)
         assertEquals(80, report.hourly.single().precipitationChance)
         assertTrue(spotApi.hourlyRequested)
+        assertFalse(openApi.requested)
+    }
+
+    @Test
+    fun `three hourly Spot tail fills every hour of a BPF gap across a month boundary`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.getSharedPreferences("met_office_weather_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
+        val prefs = PreferencesManager(context).apply {
+            setForecastSource(ForecastSource.MET_OFFICE_BPF)
+            setBpfApiKey("bpf-test-key")
+            setApiKey("spot-test-key")
+        }
+        val openApi = RecordingOpenMeteoApi()
+        val repository = WeatherRepository(
+            preferencesManager = prefs,
+            metOfficeApi = RollingTailSpotApi(),
+            metOfficeBpfApi = MonthBoundaryHoleBpfApi(),
+            openMeteoApi = openApi
+        )
+
+        val report = repository.getWeatherReport(LocationItem.DEFAULT_LOCATIONS.first()).getOrThrow()
+
+        assertEquals(WeatherDataSource.MET_OFFICE_BPF, report.dataSource)
+        assertEquals(WeatherDataSource.MET_OFFICE_DATAHUB, report.partialFallbackSource)
+        listOf("00", "01", "02").forEach { hour ->
+            val item = report.hourly.first { it.fullTime == "2099-09-01T$hour:00:00Z" }
+            assertEquals(13, item.weatherCode.code)
+            // BPF probability is complete here, so only the missing weather
+            // code should be sourced from Spot.
+            assertEquals(20, item.precipitationChance)
+        }
         assertFalse(openApi.requested)
     }
 
@@ -358,6 +425,184 @@ class WeatherRepositoryFallbackTest {
                 }
             """.trimIndent()
         }
+    }
+
+    private class MonthBoundaryHoleBpfApi : MetOfficeBpfApiService {
+        private val hours = (21..23).map { "2099-08-31T${it}:00:00Z" } +
+            (0..5).map { "2099-09-01T${it.toString().padStart(2, '0')}:00:00Z" }
+        private val intervalEnds = hours.map { timestamp ->
+            val millis = java.time.Instant.parse(timestamp).toEpochMilli() + 60L * 60L * 1000L
+            java.time.Instant.ofEpochMilli(millis).toString()
+        }
+        private val hourlyBounds = hours.zip(intervalEnds).flatMap { (start, end) -> listOf(start, end) }
+
+        override suspend fun getUkPercentiles(
+            coords: String,
+            parameterNames: String,
+            datetime: String,
+            apiKey: String
+        ): Response<ResponseBody> = Response.success(
+            """
+            {
+              "type":"CoverageCollection",
+              "coverages":[
+                ${seriesCoverage("airTemperature1p5m", 294.15, includeLocation = true)},
+                ${seriesCoverage("feelsLikeTemperature1p5m", 293.15)},
+                ${seriesCoverage("relativeHumidity1p5m", 0.61)},
+                ${seriesCoverage("windSpeed10m", 3.0)},
+                ${intervalCoverage("windSpeedOfGust10mMaximumPt01h", intervalEnds, hourlyBounds, List(hours.size) { 5.0 })},
+                ${seriesCoverage("windFromDirection10mMean", 220.0)},
+                ${seriesCoverage("airPressureAtSeaLevel", 101500.0)},
+                ${seriesCoverage("visibilityInAir1p5m", 20000.0)},
+                ${weatherCodeCoverage()},
+                ${seriesCoverage("ultravioletIndex", 4.0)}
+              ]
+            }
+            """.trimIndent().toResponseBody()
+        )
+
+        override suspend fun getUkProbabilities(
+            coords: String,
+            parameterNames: String,
+            datetime: String,
+            apiKey: String
+        ): Response<ResponseBody> = Response.success(
+            """
+            {
+              "type":"CoverageCollection",
+              "coverages":[
+                ${probabilityCoverage("probabilityOfLweThicknessOfPrecipitationAmountAboveThresholdSumPt01h", intervalEnds, hourlyBounds)},
+                ${probabilityCoverage(
+                    "probabilityOfLweThicknessOfPrecipitationAmountAboveThresholdSumPt03h",
+                    listOf("2099-09-01T00:00:00Z", "2099-09-01T03:00:00Z", "2099-09-01T06:00:00Z"),
+                    listOf(
+                        "2099-08-31T21:00:00Z", "2099-09-01T00:00:00Z",
+                        "2099-09-01T00:00:00Z", "2099-09-01T03:00:00Z",
+                        "2099-09-01T03:00:00Z", "2099-09-01T06:00:00Z"
+                    )
+                )}
+              ]
+            }
+            """.trimIndent().toResponseBody()
+        )
+
+        override suspend fun getCollections(apiKey: String): Response<ResponseBody> =
+            Response.success("{}".toResponseBody())
+
+        private fun seriesCoverage(parameter: String, value: Double, includeLocation: Boolean = false): String {
+            val locationAxes = if (includeLocation) {
+                "\"x\":{\"values\":[-0.1278]},\"y\":{\"values\":[51.5074]},\"locationId\":{\"values\":[\"test\"]},"
+            } else ""
+            return """
+                {
+                  "type":"Coverage",
+                  "domain":{"axes":{$locationAxes"t":{"values":${jsonStrings(hours)}}}},
+                  "ranges":{"$parameter":{"axisNames":["t"],"shape":[${hours.size}],"values":[${List(hours.size) { value }.joinToString(",")}]}}
+                }
+            """.trimIndent()
+        }
+
+        private fun weatherCodeCoverage(): String = intervalCoverage(
+            parameter = "weatherCodePt03h",
+            times = listOf("2099-09-01T00:00:00Z", "2099-09-01T06:00:00Z"),
+            bounds = listOf(
+                "2099-08-31T21:00:00Z", "2099-09-01T00:00:00Z",
+                "2099-09-01T03:00:00Z", "2099-09-01T06:00:00Z"
+            ),
+            values = listOf(3.0, 7.0)
+        )
+
+        private fun intervalCoverage(
+            parameter: String,
+            times: List<String>,
+            bounds: List<String>,
+            values: List<Double>
+        ): String = """
+            {
+              "type":"Coverage",
+              "domain":{"axes":{"t":{"values":${jsonStrings(times)},"bounds":${jsonStrings(bounds)}}}},
+              "ranges":{"$parameter":{"axisNames":["t"],"shape":[${times.size}],"values":[${values.joinToString(",")}]}}
+            }
+        """.trimIndent()
+
+        private fun probabilityCoverage(parameter: String, times: List<String>, bounds: List<String>): String = """
+            {
+              "type":"Coverage",
+              "domain":{"axes":{"t":{"values":${jsonStrings(times)},"bounds":${jsonStrings(bounds)}},"${parameter}Values":{"values":[">0.0"]}}},
+              "ranges":{"$parameter":{"axisNames":["${parameter}Values","t"],"shape":[1,${times.size}],"values":[${List(times.size) { 0.2 }.joinToString(",")}]}}
+            }
+        """.trimIndent()
+
+        private fun jsonStrings(values: List<String>): String =
+            values.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+    }
+
+    private class RollingTailSpotApi : MetOfficeApiService {
+        private fun response(timeSeries: List<MetOfficeHourlyTimeSeriesItem>) = Response.success(
+            MetOfficeHourlyResponse(
+                features = listOf(
+                    MetOfficeHourlyFeature(
+                        geometry = MetOfficeGeometry(coordinates = listOf(-0.1278, 51.5074)),
+                        properties = MetOfficeHourlyProperties(
+                            location = MetOfficeLocation("London"),
+                            modelRunDate = "2099-08-31T12:00:00Z",
+                            timeSeries = timeSeries
+                        )
+                    )
+                )
+            )
+        )
+
+        private fun item(time: String, code: Int, probability: Int) = MetOfficeHourlyTimeSeriesItem(
+            time = time,
+            maxScreenAirTemp = 15.0,
+            minScreenAirTemp = 13.0,
+            feelsLikeTemperature = 12.5,
+            screenRelativeHumidity = 77.0,
+            significantWeatherCode = code,
+            probOfPrecipitation = probability,
+            windSpeed10m = 3.5,
+            windGustSpeed10m = 6.5,
+            windDirectionFrom10m = 240,
+            visibility = 20_000,
+            mslp = 101_400.0,
+            uvIndex = 0
+        )
+
+        override suspend fun getPointHourly(
+            latitude: Double,
+            longitude: Double,
+            includeLocationName: Boolean,
+            excludeParameterMetadata: Boolean,
+            apiKey: String,
+            clientId: String?,
+            clientSecret: String?
+        ) = response(listOf(item("2099-08-31T21:00:00Z", 3, 5)))
+
+        override suspend fun getPointThreeHourly(
+            latitude: Double,
+            longitude: Double,
+            includeLocationName: Boolean,
+            excludeParameterMetadata: Boolean,
+            apiKey: String,
+            clientId: String?,
+            clientSecret: String?
+        ) = response(
+            listOf(
+                item("2099-09-01T00:00:00Z", 13, 72),
+                item("2099-09-01T03:00:00Z", 7, 20)
+            )
+        )
+
+        override suspend fun getPointDaily(
+            latitude: Double,
+            longitude: Double,
+            includeLocationName: Boolean,
+            excludeParameterMetadata: Boolean,
+            apiKey: String,
+            clientId: String?,
+            clientSecret: String?
+        ) = Response.error<io.github.tychomagnetic.metterweather.data.model.MetOfficeDailyResponse>(404, "unused".toResponseBody())
     }
 
     private class SuccessfulSpotApi(

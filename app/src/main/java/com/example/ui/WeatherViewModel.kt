@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
 import io.github.tychomagnetic.metterweather.data.model.ApiDebugInfo
+import io.github.tychomagnetic.metterweather.data.model.ApiDiagnosticSource
 import io.github.tychomagnetic.metterweather.data.model.CoordinateTestResult
 import io.github.tychomagnetic.metterweather.data.model.DailyForecastItem
 import io.github.tychomagnetic.metterweather.data.model.ForecastSource
@@ -76,6 +77,9 @@ data class WeatherUiState(
     val selectedDayForDetail: DailyForecastItem? = null,
     val isDayDetailSheetOpen: Boolean = false,
     val debugInfo: ApiDebugInfo? = null,
+    val selectedApiDiagnosticSource: ApiDiagnosticSource = ApiDiagnosticSource.MET_OFFICE_SPOT,
+    val apiDiagnosticResults: Map<ApiDiagnosticSource, ApiDebugInfo> = emptyMap(),
+    val isRunningApiDiagnostic: Boolean = false,
     val isDebugSheetOpen: Boolean = false,
     val customLatInput: String = "51.5074",
     val customLonInput: String = "-0.1278",
@@ -361,7 +365,11 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             current.copy(
                 weatherReport = existingReport,
                 selectedLocation = updatedLocation,
-                isLocationSheetOpen = false
+                isLocationSheetOpen = false,
+                apiDiagnosticResults = if (
+                    current.selectedLocation.latitude != updatedLocation.latitude ||
+                    current.selectedLocation.longitude != updatedLocation.longitude
+                ) emptyMap() else current.apiDiagnosticResults
             )
         }
         loadWeather(updatedLocation)
@@ -711,10 +719,16 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
 
     fun openDebugSheet() {
         val currentLoc = _uiState.value.selectedLocation
+        val diagnosticSource = when (_uiState.value.forecastSource) {
+            ForecastSource.MET_OFFICE_SPOT -> ApiDiagnosticSource.MET_OFFICE_SPOT
+            ForecastSource.MET_OFFICE_BPF -> ApiDiagnosticSource.MET_OFFICE_BPF
+            ForecastSource.OPEN_METEO -> ApiDiagnosticSource.OPEN_METEO
+        }
         repository.setDebugPayloadCaptureEnabled(true)
         _uiState.update {
             it.copy(
                 isDebugSheetOpen = true,
+                selectedApiDiagnosticSource = diagnosticSource,
                 customLatInput = String.format(Locale.US, "%.4f", currentLoc.latitude),
                 customLonInput = String.format(Locale.US, "%.4f", currentLoc.longitude)
             )
@@ -724,6 +738,40 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     fun closeDebugSheet() {
         repository.setDebugPayloadCaptureEnabled(false)
         _uiState.update { it.copy(isDebugSheetOpen = false) }
+    }
+
+    fun selectApiDiagnosticSource(source: ApiDiagnosticSource) {
+        _uiState.update { it.copy(selectedApiDiagnosticSource = source) }
+    }
+
+    fun runApiDiagnostic(source: ApiDiagnosticSource = _uiState.value.selectedApiDiagnosticSource) {
+        if (_uiState.value.isRunningApiDiagnostic) return
+        val location = _uiState.value.selectedLocation
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    selectedApiDiagnosticSource = source,
+                    isRunningApiDiagnostic = true
+                )
+            }
+            try {
+                val result = repository.runApiDiagnostic(source, location)
+                _uiState.update {
+                    val stillInspectingSameLocation =
+                        kotlin.math.abs(it.selectedLocation.latitude - location.latitude) < 0.0001 &&
+                        kotlin.math.abs(it.selectedLocation.longitude - location.longitude) < 0.0001
+                    it.copy(
+                        apiDiagnosticResults = if (stillInspectingSameLocation) {
+                            it.apiDiagnosticResults + (source to result)
+                        } else {
+                            it.apiDiagnosticResults
+                        }
+                    )
+                }
+            } finally {
+                _uiState.update { it.copy(isRunningApiDiagnostic = false) }
+            }
+        }
     }
 
     fun updateCustomLat(latStr: String) {
