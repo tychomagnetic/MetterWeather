@@ -70,6 +70,7 @@ The official [BPF API user guide](https://datahub.metoffice.gov.uk/docs/f/catego
 The free BPF allowance is currently much tighter than Spot (listed by the Met Office as up to 55 calls per day). To conserve it:
 
 - A new BPF forecast normally uses two API calls: one percentile request and one probability request.
+- BPF fields can have different timestamp counts and end times. Unsupported terminal hours are trimmed before checking for missing data; genuine gaps within the forecast can still use Spot fallback.
 - BPF results are cached separately for each location for two hours.
 - Switching back to a recently viewed location reuses its fresh cache rather than calling the API again.
 - A manual refresh deliberately bypasses the cache and makes a new request.

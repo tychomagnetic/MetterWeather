@@ -649,7 +649,7 @@ class WeatherRepository(
         val apiKey = preferencesManager.getApiKey()
         if (apiKey.isBlank()) {
             return@withContext Result.failure(
-                IllegalStateException("A Met Office Spot API key is required for widget refreshes.")
+                WidgetForecastException()
             )
         }
 
@@ -673,7 +673,7 @@ class WeatherRepository(
                 )
             } else {
                 Result.failure(
-                    IllegalStateException("Met Office Spot widget refresh failed (HTTP ${response.code()}).")
+                    WidgetForecastException(response.code(), response.headers()["Retry-After"])
                 )
             }
         } catch (error: CancellationException) {
@@ -1306,7 +1306,14 @@ class WeatherRepository(
             location
         ).coerceIn(0, expandedTimes.lastIndex)
         val currentExpandedTime = expandedTimes[expandedCurrentIndex]
-        val hasMissingBpfData = expandedTimes.drop(expandedCurrentIndex).any { time ->
+        // Instantaneous fields include the final validity boundary, but period
+        // fields cover hours strictly before it. Establish the usable BPF horizon
+        // before looking for holes, otherwise that endpoint always requests Spot.
+        // Keep an entirely unusable response eligible for the normal fallback.
+        val bpfTimes = BpfIntervalUtils.trimIncompleteTail(expandedTimes) { time ->
+            precipitationProbabilityAt(time) != null && weatherCodeAt(time)?.roundToInt() in 0..30
+        }.takeIf { it.size > expandedCurrentIndex } ?: expandedTimes
+        val hasMissingBpfData = bpfTimes.drop(expandedCurrentIndex).any { time ->
             weatherCodeAt(time)?.roundToInt() !in 0..30 ||
                 precipitationProbabilityAt(time) == null ||
                 temperatureAt(time) == null ||
@@ -1334,11 +1341,9 @@ class WeatherRepository(
             timeMillisByTime[time]?.let(spotHoursByTime::get)
         val spotDaysByDate = spotFallbackReport?.daily?.associateBy { it.date }.orEmpty()
 
-        // Only trim a terminal timestamp after both providers have been
-        // considered. Previously the BPF-only tail was discarded before Spot
-        // could fill it, while internal gaps on a partial eighth calendar date
-        // survived and then invalidated the entire BPF forecast.
-        val times = BpfIntervalUtils.trimIncompleteTail(expandedTimes) { time ->
+        // Internal holes may still use Spot; do not extend the BPF horizon merely
+        // because Spot happens to provide a longer forecast.
+        val times = BpfIntervalUtils.trimIncompleteTail(bpfTimes) { time ->
             (precipitationProbabilityAt(time) != null || spotAt(time) != null) &&
                 (weatherCodeAt(time)?.roundToInt() in 0..30 || spotAt(time) != null)
         }

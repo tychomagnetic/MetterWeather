@@ -38,6 +38,57 @@ import retrofit2.Response
 class WeatherRepositoryFallbackTest {
 
     @Test
+    fun `live BPF mixed cadence response trims endpoint without requesting Spot`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.getSharedPreferences("met_office_weather_prefs", Context.MODE_PRIVATE)
+            .edit().clear().commit()
+        val prefs = PreferencesManager(context).apply {
+            setForecastSource(ForecastSource.MET_OFFICE_BPF)
+            setBpfApiKey("bpf-test-key")
+            setApiKey("spot-test-key")
+        }
+        val spotApi = SuccessfulSpotApi()
+        val openApi = RecordingOpenMeteoApi()
+        val repository = WeatherRepository(
+            preferencesManager = prefs,
+            metOfficeApi = spotApi,
+            metOfficeBpfApi = CapturedBpfApi(),
+            openMeteoApi = openApi
+        )
+
+        val report = repository.getWeatherReport(LocationItem.DEFAULT_LOCATIONS.first()).getOrThrow()
+
+        assertEquals(WeatherDataSource.MET_OFFICE_BPF, report.dataSource)
+        assertEquals(null, report.partialFallbackSource)
+        assertFalse(spotApi.hourlyRequested)
+        assertFalse(openApi.requested)
+        assertEquals(168, report.hourly.size)
+        assertEquals("2099-09-15T14:00:00Z", report.hourly.last().fullTime)
+        assertTrue(report.hourly.all { it.weatherCode.code in 0..30 })
+        assertEquals(7, report.daily.size)
+    }
+
+    // London response captured on 2026-09-08 with the production request's
+    // parameters. Metadata removed and year shifted to keep it in the future;
+    // all source timestamps, bounds, axes and values otherwise preserved.
+    private class CapturedBpfApi : MetOfficeBpfApiService {
+        private fun payload(name: String): Response<ResponseBody> = Response.success(
+            checkNotNull(javaClass.getResource("/bpf/$name.json")).readText().toResponseBody()
+        )
+
+        override suspend fun getUkPercentiles(
+            coords: String, parameterNames: String, datetime: String, apiKey: String
+        ) = payload("percentiles")
+
+        override suspend fun getUkProbabilities(
+            coords: String, parameterNames: String, datetime: String, apiKey: String
+        ) = payload("probabilities")
+
+        override suspend fun getCollections(apiKey: String): Response<ResponseBody> =
+            error("Collection discovery is not needed for forecast refresh")
+    }
+
+    @Test
     fun `BPF diagnostic never follows the forecast fallback chain`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.getSharedPreferences("met_office_weather_prefs", Context.MODE_PRIVATE)

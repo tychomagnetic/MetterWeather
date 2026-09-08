@@ -11,7 +11,10 @@ class WidgetRefreshWorker(
 
     override suspend fun doWork(): Result = when (WidgetRefreshManager.performWidgetRefresh(applicationContext)) {
         WidgetRefreshOutcome.SUCCESS,
-        WidgetRefreshOutcome.SKIPPED -> Result.success()
-        WidgetRefreshOutcome.FAILED -> Result.retry()
+        WidgetRefreshOutcome.SKIPPED,
+        WidgetRefreshOutcome.CREDENTIALS_REQUIRED,
+        WidgetRefreshOutcome.QUOTA_EXCEEDED,
+        WidgetRefreshOutcome.FAILED -> Result.success()
+        WidgetRefreshOutcome.RETRYABLE_FAILURE -> Result.retry()
     }
 }

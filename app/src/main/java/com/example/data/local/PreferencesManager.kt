@@ -492,8 +492,8 @@ class PreferencesManager(context: Context) {
         private const val KEY_CACHED_WEATHER_REPORT = "cached_weather_report"
         private const val KEY_CACHED_WIDGET_WEATHER_REPORT = "cached_widget_weather_report"
         private const val KEY_CACHED_WIDGET_GPS_LOCATION = "cached_widget_gps_location"
-        // v4 invalidates reports written before BPF probability completeness was enforced.
-        private const val KEY_CACHED_BPF_LOCATION_PREFIX = "cached_bpf_location_v4_"
+        // v5 invalidates BPF reports unnecessarily extended with Spot endpoint data.
+        private const val KEY_CACHED_BPF_LOCATION_PREFIX = "cached_bpf_location_v5_"
         private const val KEY_WIDGET_PAGE_OFFSET = "widget_page_offset"
         private const val KEY_WIDGET_REFRESH_INTERVAL = "widget_refresh_interval"
         private const val KEY_WIDGET_USE_GPS = "widget_use_gps"

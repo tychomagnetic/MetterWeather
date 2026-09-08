@@ -213,7 +213,25 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             val requestedSource = _uiState.value.forecastSource
             val isFav = isFavoriteLocation(location, _uiState.value.favoriteLocations)
             val updatedLocation = location.copy(isFavorite = isFav)
-            var staleBpfCacheDisplayed = false
+            var cachedReportDisplayed = false
+
+            if (requestedSource != ForecastSource.MET_OFFICE_BPF) {
+                val cachedReport = preferencesManager.getCachedWeatherReport()?.takeIf {
+                    matchesForecast(it, updatedLocation, requestedSource)
+                }
+                if (cachedReport != null) {
+                    _uiState.update {
+                        it.copy(
+                            weatherReport = cachedReport.copy(location = updatedLocation),
+                            selectedLocation = updatedLocation,
+                            isLoading = false,
+                            isRefreshing = true,
+                            errorMessage = null
+                        )
+                    }
+                    cachedReportDisplayed = true
+                }
+            }
 
             if (useFreshBpfCache && requestedSource == ForecastSource.MET_OFFICE_BPF) {
                 val cachedReport = preferencesManager.getCachedBpfWeatherReport(updatedLocation)
@@ -235,18 +253,17 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                             )
                         }
                         showRefreshingToast()
-                        staleBpfCacheDisplayed = true
+                        cachedReportDisplayed = true
                     }
                 }
             }
 
-            if (!staleBpfCacheDisplayed) {
+            if (!cachedReportDisplayed) {
                 if (isRefresh) {
                     val currentState = _uiState.value
                     val visibleReport = currentState.weatherReport
                     val visibleReportMatchesLocation = visibleReport != null &&
-                        kotlin.math.abs(visibleReport.location.latitude - updatedLocation.latitude) < 0.0001 &&
-                        kotlin.math.abs(visibleReport.location.longitude - updatedLocation.longitude) < 0.0001
+                        matchesForecast(visibleReport, updatedLocation, requestedSource)
                     val visibleReportAgeMillis = visibleReport?.let {
                         System.currentTimeMillis() - it.fetchedAtMillis
                     }
@@ -263,7 +280,10 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                     }
                     showRefreshingToast()
                 } else {
-                    _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+                    _uiState.update {
+                        it.copy(weatherReport = null, selectedLocation = updatedLocation,
+                            isLoading = true, errorMessage = null)
+                    }
                 }
             }
 

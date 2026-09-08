@@ -360,6 +360,11 @@ fun WeatherScreen(
                                 )
                             }
                             val modelRunMillis = TimezoneUtils.parseIsoToMillis(report.modelRunTime)
+                            Text(
+                                text = forecastAge(report.fetchedAtMillis, uiState.clockTickMillis),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BentoTextSecondary
+                            )
                             val timestampMillis = modelRunMillis ?: report.fetchedAtMillis
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
