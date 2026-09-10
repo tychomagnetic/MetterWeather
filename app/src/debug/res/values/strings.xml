@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Metter Weather</string>
+    <string name="app_name">Metter Weather Dev</string>
+    <string name="widget_name">Metter Weather Dev — Hourly Forecast</string>
 </resources>

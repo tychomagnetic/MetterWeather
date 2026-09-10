@@ -62,15 +62,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object WidgetKeys {
+    const val VISIBLE_HOURS = 5
     val PAGE_OFFSET = intPreferencesKey("widget_page_offset")
     val REFRESH_TIMESTAMP = longPreferencesKey("widget_refresh_timestamp")
 }
+
+internal fun shiftedWidgetOffset(offset: Int, direction: Int, maxOffset: Int): Int =
+    (offset.coerceIn(0, maxOffset) + direction.coerceIn(-1, 1) * WidgetKeys.VISIBLE_HOURS)
+        .coerceIn(0, maxOffset)
 
 class HourlyForecastWidget : GlanceAppWidget() {
 
     override val stateDefinition = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        WidgetClock.schedule(context)
         provideContent {
             val glancePrefs = currentState<Preferences>()
             val pageOffset = glancePrefs[WidgetKeys.PAGE_OFFSET] ?: 0
@@ -149,12 +155,12 @@ fun HourlyForecastWidgetContent(
         "widget_gps_location_unavailable" -> "Waiting for a location fix"
         else -> "Weather Forecast"
     }
-    val maxOffset = (allHourly.size - nowIndex - 5).coerceAtLeast(0)
+    val maxOffset = (allHourly.size - nowIndex - WidgetKeys.VISIBLE_HOURS).coerceAtLeast(0)
     val clampedOffset = pageOffset.coerceIn(0, maxOffset)
     val effectiveStartIndex = (nowIndex + clampedOffset).coerceIn(0, (allHourly.size - 1).coerceAtLeast(0))
 
     val visibleHourly = if (allHourly.isNotEmpty()) {
-        allHourly.drop(effectiveStartIndex).take(5).mapIndexed { visibleIndex, item ->
+        allHourly.drop(effectiveStartIndex).take(WidgetKeys.VISIBLE_HOURS).mapIndexed { visibleIndex, item ->
             item.copy(isNow = effectiveStartIndex + visibleIndex == nowIndex)
         }
     } else {
@@ -219,7 +225,7 @@ fun HourlyForecastWidgetContent(
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (allHourly.size > 5) {
+                    if (allHourly.size > WidgetKeys.VISIBLE_HOURS) {
                         // "Now" Button to the left of the left arrow to jump back to present time
                         Box(
                             modifier = GlanceModifier
@@ -253,7 +259,7 @@ fun HourlyForecastWidgetContent(
                                 .padding(7.dp)
                                 .clickable(
                                     actionRunCallback<ShiftHoursActionCallback>(
-                                        actionParametersOf(ShiftHoursActionCallback.OFFSET_DELTA_KEY to -3)
+                                        actionParametersOf(ShiftHoursActionCallback.OFFSET_DELTA_KEY to -WidgetKeys.VISIBLE_HOURS)
                                     )
                                 )
                         )
@@ -271,7 +277,7 @@ fun HourlyForecastWidgetContent(
                                 .padding(7.dp)
                                 .clickable(
                                     actionRunCallback<ShiftHoursActionCallback>(
-                                        actionParametersOf(ShiftHoursActionCallback.OFFSET_DELTA_KEY to 3)
+                                        actionParametersOf(ShiftHoursActionCallback.OFFSET_DELTA_KEY to WidgetKeys.VISIBLE_HOURS)
                                     )
                                 )
                         )
@@ -456,7 +462,7 @@ class RefreshWeatherActionCallback : ActionCallback {
         withContext(Dispatchers.IO) {
             try {
                 val prefs = PreferencesManager(context)
-                val location = WidgetLocationHelper.getWidgetLocation(context, prefs)
+                val location = WidgetLocationHelper.getWidgetRefreshLocation(context, prefs)
                     ?: return@withContext
                 val repository = WeatherRepository(prefs)
                 val result = repository.getSpotWidgetReport(location)
@@ -540,11 +546,11 @@ class ShiftHoursActionCallback : ActionCallback {
         } else {
             0
         }
-        val maxOffset = (allHourly.size - nowIndex - 5).coerceAtLeast(0)
+        val maxOffset = (allHourly.size - nowIndex - WidgetKeys.VISIBLE_HOURS).coerceAtLeast(0)
 
         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { glancePrefs ->
             val currentOffset = glancePrefs[WidgetKeys.PAGE_OFFSET] ?: 0
-            val newOffset = (currentOffset + delta).coerceIn(0, maxOffset)
+            val newOffset = shiftedWidgetOffset(currentOffset, delta, maxOffset)
             prefs.setWidgetPageOffset(newOffset)
             glancePrefs.toMutablePreferences().apply {
                 this[WidgetKeys.PAGE_OFFSET] = newOffset

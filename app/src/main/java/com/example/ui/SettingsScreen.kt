@@ -159,17 +159,47 @@ fun SettingsScreen(
     var widgetLocationPermissionGranted by remember {
         mutableStateOf(WidgetLocationHelper.hasLocationPermission(context))
     }
+    var showWidgetBackgroundPermission by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var widgetPrecisePermissionGranted by remember {
+        mutableStateOf(WidgetLocationHelper.hasPreciseLocationPermission(context))
+    }
+    var preciseWidgetClock by remember {
+        mutableStateOf(io.github.tychomagnetic.metterweather.widget.WidgetClock.canSchedulePrecisely(context))
+    }
+    var widgetBackgroundPermissionGranted by remember {
+        mutableStateOf(WidgetLocationHelper.hasBackgroundLocationPermission(context))
+    }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        widgetPrecisePermissionGranted = WidgetLocationHelper.hasPreciseLocationPermission(context)
+        preciseWidgetClock = io.github.tychomagnetic.metterweather.widget.WidgetClock.canSchedulePrecisely(context)
+        io.github.tychomagnetic.metterweather.widget.WidgetClock.schedule(context)
+        val hadBackgroundPermission = widgetBackgroundPermissionGranted
+        widgetLocationPermissionGranted = WidgetLocationHelper.hasLocationPermission(context)
+        widgetBackgroundPermissionGranted = WidgetLocationHelper.hasBackgroundLocationPermission(context)
+        if (!hadBackgroundPermission && widgetBackgroundPermissionGranted && viewModel.uiState.value.widgetUseGps) {
+            viewModel.syncWidgetNow()
+        }
+        onPauseOrDispose { }
+    }
+    val backgroundPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        widgetBackgroundPermissionGranted = WidgetLocationHelper.hasBackgroundLocationPermission(context)
+        if (widgetBackgroundPermissionGranted && viewModel.uiState.value.widgetUseGps) viewModel.syncWidgetNow()
+    }
     val widgetLocationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
+        widgetPrecisePermissionGranted = WidgetLocationHelper.hasPreciseLocationPermission(context)
         widgetLocationPermissionGranted =
             permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
                 WidgetLocationHelper.hasLocationPermission(context)
         if (widgetLocationPermissionGranted) {
             viewModel.setWidgetUseGps(true)
+            showWidgetBackgroundPermission = WidgetLocationHelper.hasPreciseLocationPermission(context) && !WidgetLocationHelper.hasBackgroundLocationPermission(context)
             Toast.makeText(
                 context,
-                "Widget set to GPS location (imprecise on refresh)",
+                "Widget set to precise GPS location on refresh",
                 Toast.LENGTH_SHORT
             ).show()
         } else {
@@ -183,6 +213,37 @@ fun SettingsScreen(
 
     BackHandler {
         if (apiSettingsOpen) apiSettingsOpen = false else onBack()
+    }
+
+    if (showWidgetBackgroundPermission) {
+        val backgroundOptionLabel = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            context.packageManager.backgroundPermissionOptionLabel.toString()
+        } else "Allow all the time"
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showWidgetBackgroundPermission = false },
+            title = { Text("Location for widget updates") },
+            text = {
+                Text("Metter Weather uses your precise location to update the GPS widget when the app is closed. " +
+                    "Choose $backgroundOptionLabel in the app's location permissions to enable this. " +
+                    "Without it, GPS refreshes pause and the existing forecast stays visible. You can also choose a fixed location.")
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showWidgetBackgroundPermission = false
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                        context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:${context.packageName}")))
+                    } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        backgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    }
+                }) { Text("Continue") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showWidgetBackgroundPermission = false }) {
+                    Text("Not now")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -1222,6 +1283,17 @@ fun SettingsScreen(
                 icon = Icons.Default.Widgets,
                 subtitle = "Configure widget location, background forecast refreshes, and sync"
             ) {
+                if (!preciseWidgetClock && android.os.Build.VERSION.SDK_INT >= 31) {
+                    Text("Allow precise widget timing to trigger hourly refreshes on the hour and advance Now using saved weather while the refresh runs.",
+                        style = MaterialTheme.typography.bodySmall, color = BentoTextSecondary)
+                    androidx.compose.material3.TextButton(onClick = {
+                        context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                            Uri.parse("package:${context.packageName}")))
+                    }) { Text("Allow precise widget timing") }
+                    Text("Without Alarms & reminders access, Android may delay the hour change.",
+                        style = MaterialTheme.typography.bodySmall, color = BentoTextSecondary)
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
                 // Widget Location Mode (GPS vs Fixed)
                 Text(
                     text = "Widget Location",
@@ -1231,7 +1303,7 @@ fun SettingsScreen(
                     )
                 )
                 Text(
-                    text = "The widget can use imprecise GPS location when refreshing. You can also select a fixed location.",
+                    text = "GPS mode requests a fresh precise location for each refresh. Hourly refreshes are triggered on the hour. You can also select a fixed location.",
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = BentoTextSecondary,
                         fontSize = 11.5.sp
@@ -1250,12 +1322,13 @@ fun SettingsScreen(
                         onClick = {
                             widgetLocationPermissionGranted =
                                 WidgetLocationHelper.hasLocationPermission(context)
-                            if (widgetLocationPermissionGranted) {
+                            if (WidgetLocationHelper.hasPreciseLocationPermission(context)) {
                                 viewModel.setWidgetUseGps(true)
-                                Toast.makeText(context, "Widget set to GPS location (imprecise on refresh)", Toast.LENGTH_SHORT).show()
+                                showWidgetBackgroundPermission = WidgetLocationHelper.hasPreciseLocationPermission(context) && !WidgetLocationHelper.hasBackgroundLocationPermission(context)
+                                Toast.makeText(context, "Widget set to precise GPS location on refresh", Toast.LENGTH_SHORT).show()
                             } else {
                                 widgetLocationPermissionLauncher.launch(
-                                    arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)
+                                    arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
                                 )
                             }
                         },
@@ -1284,6 +1357,22 @@ fun SettingsScreen(
                         )
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                if (uiState.widgetUseGps && !widgetPrecisePermissionGranted) {
+                    Text("Precise location is required for GPS refreshes. Enable Use precise location in Android's location permissions.",
+                        style = MaterialTheme.typography.bodySmall, color = BentoTextSecondary)
+                    androidx.compose.material3.TextButton(onClick = {
+                        context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:${context.packageName}")))
+                    }) { Text("Location permissions") }
+                }
+                if (uiState.widgetUseGps && widgetPrecisePermissionGranted && !widgetBackgroundPermissionGranted) {
+                    Text("Background location is off. GPS refreshes are paused; the existing forecast stays visible.",
+                        style = MaterialTheme.typography.bodySmall, color = BentoTextSecondary)
+                    androidx.compose.material3.TextButton(onClick = { showWidgetBackgroundPermission = true }) {
+                        Text("Enable background location")
+                    }
                 }
 
                 if (!uiState.widgetUseGps) {
@@ -1371,7 +1460,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Widget automatically resolves your approximate GPS/network position whenever it refreshes.",
+                                text = "Widget requests a fresh precise GPS position whenever it refreshes.",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = BentoTextSecondary,
                                     fontSize = 11.5.sp,

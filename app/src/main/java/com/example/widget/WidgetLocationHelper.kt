@@ -18,6 +18,54 @@ object WidgetLocationHelper {
 
     private const val TAG = "WidgetLocationHelper"
 
+    fun hasBackgroundLocationPermission(context: Context): Boolean =
+        hasLocationPermission(context) && (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED)
+
+    fun hasPreciseLocationPermission(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    internal fun preciseLocationRequest() = com.google.android.gms.location.CurrentLocationRequest.Builder()
+        .setPriority(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY)
+        .setGranularity(com.google.android.gms.location.Granularity.GRANULARITY_FINE)
+        .setMaxUpdateAgeMillis(0L)
+        .setDurationMillis(30_000L)
+        .build()
+
+    /** Obtain one fresh precise fix; leave the displayed forecast intact if unavailable. */
+    suspend fun getWidgetRefreshLocation(context: Context, prefs: PreferencesManager): LocationItem? {
+        if (!prefs.isWidgetGpsEnabled()) return prefs.getWidgetFixedLocation()
+        if (!hasPreciseLocationPermission(context) || !hasBackgroundLocationPermission(context)) return null
+        return try {
+            val fix = kotlinx.coroutines.withTimeoutOrNull(30_000L) {
+                kotlinx.coroutines.suspendCancellableCoroutine<Location?> { continuation ->
+                    val cancellation = com.google.android.gms.tasks.CancellationTokenSource()
+                    continuation.invokeOnCancellation { cancellation.cancel() }
+                    com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context)
+                        .getCurrentLocation(preciseLocationRequest(), cancellation.token)
+                        .addOnSuccessListener { continuation.resumeWith(Result.success(it)) }
+                        .addOnFailureListener { continuation.resumeWith(Result.failure(it)) }
+                        .addOnCanceledListener { continuation.cancel() }
+                }
+            }
+            fix?.let { toWidgetLocation(context, it) }
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w(TAG, "Fresh precise widget location unavailable", error)
+            null
+        }
+    }
+    private fun toWidgetLocation(context: Context, location: Location): LocationItem = LocationItem(
+        id = "widget_gps_current",
+        name = resolveLocationName(context, location.latitude, location.longitude) ?: "Current Location",
+        latitude = location.latitude,
+        longitude = location.longitude,
+        timezone = TimeZone.getDefault().id,
+        isCurrentLocation = true
+    )
+
     /**
      * Resolves the target location for the widget based on user preferences.
      * Returns null when GPS mode is selected but permission/a location fix is unavailable.

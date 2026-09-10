@@ -5,10 +5,6 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.util.Log
 import androidx.work.BackoffPolicy
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
 import io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval
@@ -33,7 +29,6 @@ object WidgetRefreshManager {
 
     private const val TAG = "WidgetRefreshManager"
     private const val WORK_NAME = "hourly_widget_refresh"
-    private const val HOUR_MILLIS = 60L * 60L * 1000L
 
     internal fun hasInstalledWidgets(context: Context): Boolean =
         AppWidgetManager.getInstance(context).getAppWidgetIds(
@@ -44,6 +39,7 @@ object WidgetRefreshManager {
         context: Context,
         interval: WidgetRefreshInterval = PreferencesManager(context).getWidgetRefreshInterval()
     ) {
+        WidgetClock.schedule(context)
         val workManager = runCatching {
             WorkManager.getInstance(context.applicationContext)
         }.getOrElse {
@@ -53,43 +49,39 @@ object WidgetRefreshManager {
             return
         }
         if (interval == WidgetRefreshInterval.OFF || !hasInstalledWidgets(context)) {
-            workManager.cancelUniqueWork(WORK_NAME)
+            cancelAutoRefresh(context)
             Log.d(TAG, "Widget auto-refresh cancelled (OFF)")
             return
         }
 
-        val now = System.currentTimeMillis()
-        val nextHour = ((now / HOUR_MILLIS) + 1L) * HOUR_MILLIS
-        val initialDelay = (nextHour - now).coerceAtLeast(1_000L)
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val request = PeriodicWorkRequestBuilder<WidgetRefreshWorker>(1, TimeUnit.HOURS)
-            .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
-            .setConstraints(constraints)
-            .setBackoffCriteria(
-                BackoffPolicy.EXPONENTIAL,
-                15L,
-                TimeUnit.MINUTES
-            )
-            .build()
+        // Migrate away from the drifting periodic schedule. WidgetClock owns each hour.
+        workManager.cancelUniqueWork(WORK_NAME)
+    }
 
-        workManager.enqueueUniquePeriodicWork(
-            WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request
-        )
-        Log.d(TAG, "Widget Spot refresh scheduled hourly from the next clock-hour boundary")
+    private const val HOURLY_REQUEST = "widget_clock_refresh"
+
+    fun enqueueHourlyRefresh(context: Context) {
+        if (!hasInstalledWidgets(context) ||
+            PreferencesManager(context).getWidgetRefreshInterval() == WidgetRefreshInterval.OFF) return
+        val request = androidx.work.OneTimeWorkRequestBuilder<WidgetRefreshWorker>()
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15L, TimeUnit.MINUTES)
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            request.setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+        }
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            HOURLY_REQUEST, androidx.work.ExistingWorkPolicy.REPLACE, request.build())
     }
 
     fun cancelAutoRefresh(context: Context) {
         runCatching {
-            WorkManager.getInstance(context.applicationContext).cancelUniqueWork(WORK_NAME)
+            WorkManager.getInstance(context.applicationContext).apply {
+                cancelUniqueWork(WORK_NAME)
+                cancelUniqueWork(HOURLY_REQUEST)
+            }
         }.onFailure {
             Log.d(TAG, "WorkManager is not available; widget cancellation skipped")
         }
     }
-
     suspend fun performWidgetRefresh(context: Context): WidgetRefreshOutcome {
         if (!hasInstalledWidgets(context)) return WidgetRefreshOutcome.SKIPPED
         var outcome = WidgetRefreshOutcome.FAILED
@@ -111,7 +103,7 @@ object WidgetRefreshManager {
                     outcome = WidgetRefreshOutcome.QUOTA_EXCEEDED
                     return@withContext
                 }
-                val location = WidgetLocationHelper.getWidgetLocation(context, prefs)
+                val location = WidgetLocationHelper.getWidgetRefreshLocation(context, prefs)
                 if (location == null) {
                     Log.w(TAG, "Widget refresh skipped: permission or current location unavailable")
                     outcome = WidgetRefreshOutcome.SKIPPED
