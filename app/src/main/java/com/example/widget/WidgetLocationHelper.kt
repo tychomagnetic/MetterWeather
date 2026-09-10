@@ -33,29 +33,54 @@ object WidgetLocationHelper {
         .setDurationMillis(30_000L)
         .build()
 
-    /** Obtain one fresh precise fix; leave the displayed forecast intact if unavailable. */
-    suspend fun getWidgetRefreshLocation(context: Context, prefs: PreferencesManager): LocationItem? {
-        if (!prefs.isWidgetGpsEnabled()) return prefs.getWidgetFixedLocation()
-        if (!hasPreciseLocationPermission(context) || !hasBackgroundLocationPermission(context)) return null
-        return try {
-            val fix = kotlinx.coroutines.withTimeoutOrNull(30_000L) {
-                kotlinx.coroutines.suspendCancellableCoroutine<Location?> { continuation ->
-                    val cancellation = com.google.android.gms.tasks.CancellationTokenSource()
-                    continuation.invokeOnCancellation { cancellation.cancel() }
-                    com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context)
-                        .getCurrentLocation(preciseLocationRequest(), cancellation.token)
-                        .addOnSuccessListener { continuation.resumeWith(Result.success(it)) }
-                        .addOnFailureListener { continuation.resumeWith(Result.failure(it)) }
-                        .addOnCanceledListener { continuation.cancel() }
-                }
-            }
-            fix?.let { toWidgetLocation(context, it) }
-        } catch (error: kotlinx.coroutines.CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            Log.w(TAG, "Fresh precise widget location unavailable", error)
-            null
+    internal fun approximateLocationRequest() = com.google.android.gms.location.CurrentLocationRequest.Builder()
+        .setPriority(com.google.android.gms.location.Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+        .setGranularity(com.google.android.gms.location.Granularity.GRANULARITY_COARSE)
+        .setMaxUpdateAgeMillis(0L)
+        .setDurationMillis(30_000L)
+        .build()
+
+    /** Prefer precise, then approximate, then the last known widget location. */
+    suspend fun getWidgetRefreshLocation(
+        context: Context,
+        prefs: PreferencesManager,
+        requestFix: suspend (com.google.android.gms.location.CurrentLocationRequest) -> Location? = {
+            requestCurrentLocation(context, it)
         }
+    ): LocationItem? {
+        if (!prefs.isWidgetGpsEnabled()) return prefs.getWidgetFixedLocation()
+        if (!hasLocationPermission(context)) return null
+        if (hasBackgroundLocationPermission(context)) {
+            val requests = buildList {
+                if (hasPreciseLocationPermission(context)) add(preciseLocationRequest())
+                add(approximateLocationRequest())
+            }
+            for (request in requests) {
+                val fix = try {
+                    kotlinx.coroutines.withTimeoutOrNull(30_000L) { requestFix(request) }
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(TAG, "Fresh widget location unavailable; trying fallback", error)
+                    null
+                }
+                if (fix != null) return toWidgetLocation(context, fix)
+            }
+        }
+        return getWidgetLocation(context, prefs)
+    }
+
+    private suspend fun requestCurrentLocation(
+        context: Context,
+        request: com.google.android.gms.location.CurrentLocationRequest
+    ): Location? = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        val cancellation = com.google.android.gms.tasks.CancellationTokenSource()
+        continuation.invokeOnCancellation { cancellation.cancel() }
+        com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context)
+            .getCurrentLocation(request, cancellation.token)
+            .addOnSuccessListener { continuation.resumeWith(Result.success(it)) }
+            .addOnFailureListener { continuation.resumeWith(Result.failure(it)) }
+            .addOnCanceledListener { continuation.cancel() }
     }
     private fun toWidgetLocation(context: Context, location: Location): LocationItem = LocationItem(
         id = "widget_gps_current",

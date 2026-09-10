@@ -137,8 +137,8 @@ This allows the development build to coexist with a production installation.
 The app may request:
 
 - Internet access for forecast and geocoding requests
-- Approximate location access for current-location forecasts; precise location access for GPS widget refreshes
-- Optional background location access for GPS widget refreshes while the app is closed. Select GPS Location in widget settings, then enable **Allow all the time** in Android's app location permissions. Without precise and background access, GPS refreshes pause and the existing forecast stays visible. Fixed-location widgets do not need location permission.
+- Approximate location access for current-location forecasts; optional precise location access for GPS widget refreshes (approximate access also works)
+- Optional background location access for GPS widget refreshes while the app is closed. Select GPS Location in widget settings, then enable **Allow all the time** in Android's app location permissions. With approximate access only, GPS refreshes use approximate location. Without background access or a fresh fix, the widget tries its last known location. Fixed-location widgets do not need location permission.
 - Optional **Alarms & reminders** access for precise widget hour rollover. Enable **Allow precise widget timing** in widget settings. The clock redraw uses saved forecasts independently of network refreshes, including when auto-refresh is off. Without this access, Android may delay the redraw. Widget arrows advance or go back five hours, matching the five visible cards.
 
 Location access is optional and is only requested when you choose a current-location feature; locations can also be searched or selected manually.
@@ -179,7 +179,7 @@ The app displays the attribution required by each provider at the bottom of the 
 - **An APK will not install over another version:** uninstalling is unnecessary when using the debug build, which has the `.dev` package ID. Signature conflicts usually mean an older build with the same package ID is installed.
 - **The widget is stale:** ensure a Global Spot key is configured. The widget uses Spot independently of the main app's selected source and refreshes at the top of each hour when automatic refresh is enabled.
 
-GPS widgets request a new high-accuracy fix (up to 30 seconds) on each refresh. With hourly refresh enabled, the hour alarm submits an expedited refresh instead of a separate periodic download schedule. Android may defer execution under system limits. Turning refresh off cancels pending automatic downloads; the cached display still advances with the clock.
+GPS widgets prefer a new high-accuracy fix, fall back to a fresh approximate fix, then try the last known widget location. Each fresh attempt has a 30-second timeout. With no location permission, the widget does not request a location; fixed-location mode remains available. With hourly refresh enabled, the hour alarm submits an expedited refresh instead of a separate periodic download schedule. Android may defer execution under system limits. Turning refresh off cancels pending automatic downloads; the cached display still advances with the clock.
 
 ## License
 
