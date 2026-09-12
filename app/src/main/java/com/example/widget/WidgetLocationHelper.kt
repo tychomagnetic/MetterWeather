@@ -3,7 +3,6 @@ package io.github.tychomagnetic.metterweather.widget
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
 import android.os.Build
@@ -11,8 +10,10 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
 import io.github.tychomagnetic.metterweather.data.model.LocationItem
-import java.util.Locale
 import java.util.TimeZone
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 object WidgetLocationHelper {
 
@@ -64,7 +65,12 @@ object WidgetLocationHelper {
                     Log.w(TAG, "Fresh widget location unavailable; trying fallback", error)
                     null
                 }
-                if (fix != null) return toWidgetLocation(context, fix)
+                if (fix != null) {
+                    // Reverse geocoding can use the network and block for an
+                    // unbounded time on older Android versions. Forecast data is
+                    // more useful than a locality label in a background widget.
+                    return currentLocationItem(fix)
+                }
             }
         }
         return getWidgetLocation(context, prefs)
@@ -95,9 +101,9 @@ object WidgetLocationHelper {
             null
         }
     }
-    private fun toWidgetLocation(context: Context, location: Location): LocationItem = LocationItem(
+    private fun currentLocationItem(location: Location): LocationItem = LocationItem(
         id = "widget_gps_current",
-        name = resolveLocationName(context, location.latitude, location.longitude) ?: "Current Location",
+        name = "Current Location",
         latitude = location.latitude,
         longitude = location.longitude,
         timezone = TimeZone.getDefault().id,
@@ -202,10 +208,11 @@ object WidgetLocationHelper {
             }
 
             if (bestLocation != null) {
-                val resolvedName = resolveLocationName(context, bestLocation.latitude, bestLocation.longitude) ?: "Current Location"
                 return LocationItem(
                     id = "widget_gps_current",
-                    name = resolvedName,
+                    // Last-known coordinates should never block a widget redraw
+                    // on a potentially network-backed reverse-geocode lookup.
+                    name = "Current Location",
                     region = null,
                     country = null,
                     latitude = bestLocation.latitude,
@@ -220,25 +227,4 @@ object WidgetLocationHelper {
         return null
     }
 
-    private fun resolveLocationName(context: Context, lat: Double, lon: Double): String? {
-        return try {
-            if (Geocoder.isPresent()) {
-                val geocoder = Geocoder(context, Locale.UK)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    val addresses = geocoder.getFromLocation(lat, lon, 1)
-                    val addr = addresses?.firstOrNull()
-                    addr?.locality ?: addr?.subAdminArea ?: addr?.adminArea ?: addr?.featureName
-                } else {
-                    @Suppress("DEPRECATION")
-                    val addresses = geocoder.getFromLocation(lat, lon, 1)
-                    val addr = addresses?.firstOrNull()
-                    addr?.locality ?: addr?.subAdminArea ?: addr?.adminArea ?: addr?.featureName
-                }
-            } else {
-                null
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

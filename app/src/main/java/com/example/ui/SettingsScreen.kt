@@ -163,15 +163,11 @@ fun SettingsScreen(
     var widgetPrecisePermissionGranted by remember {
         mutableStateOf(WidgetLocationHelper.hasPreciseLocationPermission(context))
     }
-    var preciseWidgetClock by remember {
-        mutableStateOf(io.github.tychomagnetic.metterweather.widget.WidgetClock.canSchedulePrecisely(context))
-    }
     var widgetBackgroundPermissionGranted by remember {
         mutableStateOf(WidgetLocationHelper.hasBackgroundLocationPermission(context))
     }
     androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
         widgetPrecisePermissionGranted = WidgetLocationHelper.hasPreciseLocationPermission(context)
-        preciseWidgetClock = io.github.tychomagnetic.metterweather.widget.WidgetClock.canSchedulePrecisely(context)
         io.github.tychomagnetic.metterweather.widget.WidgetClock.schedule(context)
         val hadBackgroundPermission = widgetBackgroundPermissionGranted
         widgetLocationPermissionGranted = WidgetLocationHelper.hasLocationPermission(context)
@@ -1283,17 +1279,6 @@ fun SettingsScreen(
                 icon = Icons.Default.Widgets,
                 subtitle = "Configure widget location, background forecast refreshes, and sync"
             ) {
-                if (!preciseWidgetClock && android.os.Build.VERSION.SDK_INT >= 31) {
-                    Text("Allow precise widget timing to trigger hourly refreshes on the hour and advance Now using saved weather while the refresh runs.",
-                        style = MaterialTheme.typography.bodySmall, color = BentoTextSecondary)
-                    androidx.compose.material3.TextButton(onClick = {
-                        context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                            Uri.parse("package:${context.packageName}")))
-                    }) { Text("Allow precise widget timing") }
-                    Text("Without Alarms & reminders access, Android may delay the hour change.",
-                        style = MaterialTheme.typography.bodySmall, color = BentoTextSecondary)
-                    Spacer(modifier = Modifier.height(10.dp))
-                }
                 // Widget Location Mode (GPS vs Fixed)
                 Text(
                     text = "Widget Location",
@@ -1483,7 +1468,7 @@ fun SettingsScreen(
                     )
                 )
                 Text(
-                    text = "Uses Met Office Spot data independently of the source selected in the app. Refreshes are aligned to the top of each hour.",
+                    text = "Uses Met Office Spot data independently of the source selected in the app. Refreshes are scheduled hourly and may be deferred by Android.",
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = BentoTextSecondary,
                         fontSize = 11.5.sp
@@ -1544,7 +1529,7 @@ fun SettingsScreen(
                             text = if (uiState.widgetRefreshInterval == WidgetRefreshInterval.OFF) {
                                 "Auto-refresh is off. The widget will fetch Spot data only when manually refreshed."
                             } else {
-                                "Auto-refreshing Spot data hourly. The Now slot advances from the current clock time."
+                                "Auto-refreshing Spot data hourly when Android permits it. The Now slot advances from the current clock time."
                             },
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = if (uiState.widgetRefreshInterval != WidgetRefreshInterval.OFF) BentoPurplePrimary else BentoTextSecondary,

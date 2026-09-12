@@ -151,7 +151,7 @@ The app may request:
 - Internet access for forecast and geocoding requests
 - Approximate location access for current-location forecasts; optional precise location access for GPS widget refreshes (approximate access also works)
 - Optional background location access for GPS widget refreshes while the app is closed. Select GPS Location in widget settings, then enable **Allow all the time** in Android's app location permissions. With approximate access only, GPS refreshes use approximate location. Without background access or a fresh fix, the widget tries its last known location. Fixed-location widgets do not need location permission.
-- Optional **Alarms & reminders** access for precise widget hour rollover. Enable **Allow precise widget timing** in widget settings. The clock redraw uses saved forecasts independently of network refreshes, including when auto-refresh is off. Without this access, Android may delay the redraw. Widget arrows advance or go back five hours, matching the five visible cards.
+- The widget uses a non-waking, inexact hour-boundary redraw, so Android may defer it while the device sleeps. WorkManager handles automatic network refreshes separately, and the clock redraw uses saved forecasts even when auto-refresh is off. Widget arrows advance or go back five hours, matching the five visible cards.
 
 Location access is optional and is only requested when you choose a current-location feature; locations can also be searched or selected manually.
 
@@ -189,9 +189,9 @@ The app displays the attribution required by each provider at the bottom of the 
 - **BPF does not immediately fetch again:** forecasts newer than two hours are intentionally served from the location cache. Use manual refresh to force a new pull.
 - **The app will not build:** confirm Android Studio’s JDK is selected and that the Android SDK path in `local.properties` is valid.
 - **An APK will not install over another version:** uninstalling is unnecessary when using the debug build, which has the `.dev` package ID. Signature conflicts usually mean an older build with the same package ID is installed.
-- **The widget is stale:** ensure a Global Spot key is configured. The widget uses Spot independently of the main app's selected source and refreshes at the top of each hour when automatic refresh is enabled.
+- **The widget is stale:** ensure a Global Spot key is configured. The widget uses Spot independently of the main app's selected source and schedules automatic refreshes hourly; Android may defer background work.
 
-GPS widgets prefer a new high-accuracy fix, fall back to a fresh approximate fix, then try the last known widget location. Each fresh attempt has a 30-second timeout. With no location permission, the widget does not request a location; fixed-location mode remains available. With hourly refresh enabled, the hour alarm submits an expedited refresh. A durable hourly recovery check and launcher updates also recover missed updates; all automatic triggers share a limit of one attempt per clock hour. Failed attempts become eligible again next hour. Android may defer execution under system limits. A successful manual widget refresh clears saved authentication and quota pauses. Turning refresh off cancels pending automatic downloads; the cached display still advances with the clock.
+GPS widgets prefer a new high-accuracy fix, fall back to a fresh approximate fix, then try the last known widget location. Each fresh attempt has a 30-second timeout. With no location permission, the widget does not request a location; fixed-location mode remains available. With hourly refresh enabled, WorkManager owns automatic network downloads with a connected-network constraint and a one-attempt-per-clock-hour gate. The separate hour alarm advances the cached display and does not start network work. Failed attempts become eligible again next hour. Android may defer execution under system limits. A successful manual widget refresh is queued through WorkManager and clears saved authentication and quota pauses. Turning refresh off cancels pending automatic downloads; the cached display still advances with the clock.
 
 ## License
 

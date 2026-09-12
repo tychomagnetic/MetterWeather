@@ -145,13 +145,13 @@ under `app/src/debug/res/`.
 - The widget uses `getSpotWidgetReport` and Global Spot only, independently of
   the main app source. Do not introduce BPF or Open-Meteo fallback into it.
 - Keep clock redraws separate from network refreshes. Cached hours must advance
-  even when automatic downloads are off. Hourly alarms coordinate automatic
-  refresh. A durable hourly recovery worker and launcher updates share a
-  persisted hourly attempt gate with the alarm, so recovery cannot duplicate
-  downloads in the same hour. Failed attempts become eligible next hour.
+  even when automatic downloads are off. WorkManager owns automatic network
+  refreshes with a connected-network constraint and one attempt per clock hour;
+  manual widget actions enqueue a worker. Failed attempts become eligible next
+  hour.
 - `WidgetClock`, `WidgetRefreshManager`, `WidgetRefreshWorker` and receivers
   jointly handle scheduling. Preserve off-state cancellation, reboot/timezone
-  handling, and operation without exact-alarm permission.
+  handling, and the non-waking inexact hour-boundary alarm.
 - Keep credential errors, quota errors and transient failures distinct through
   `WidgetFailurePolicy`; do not retry all failures indiscriminately.
 - Fixed-location mode needs no location permission. GPS mode supports

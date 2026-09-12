@@ -1,6 +1,7 @@
 package io.github.tychomagnetic.metterweather.widget
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -58,8 +59,6 @@ import io.github.tychomagnetic.metterweather.data.model.WeatherReport
 import io.github.tychomagnetic.metterweather.data.repository.WeatherRepository
 import io.github.tychomagnetic.metterweather.data.util.TimezoneUtils
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 object WidgetKeys {
     const val VISIBLE_HOURS = 5
@@ -104,11 +103,17 @@ class HourlyForecastWidget : GlanceAppWidget() {
     }
     companion object {
         suspend fun updateAllWidgets(context: Context, resetPage: Boolean = false) {
-            try {
-                val manager = GlanceAppWidgetManager(context)
-                val glanceIds = manager.getGlanceIds(HourlyForecastWidget::class.java)
-                val widget = HourlyForecastWidget()
-                for (glanceId in glanceIds) {
+            val glanceIds = try {
+                GlanceAppWidgetManager(context).getGlanceIds(HourlyForecastWidget::class.java)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w("HourlyForecastWidget", "Unable to find widget instances for update", error)
+                return
+            }
+            val widget = HourlyForecastWidget()
+            for (glanceId in glanceIds) {
+                try {
                     updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { glancePrefs ->
                         glancePrefs.toMutablePreferences().apply {
                             if (resetPage) this[WidgetKeys.PAGE_OFFSET] = 0
@@ -116,10 +121,11 @@ class HourlyForecastWidget : GlanceAppWidget() {
                         }
                     }
                     widget.update(context, glanceId)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w("HourlyForecastWidget", "Unable to update widget $glanceId", error)
                 }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
             }
         }
     }
@@ -458,25 +464,7 @@ class RefreshWeatherActionCallback : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters
     ) {
-        withContext(Dispatchers.IO) {
-            try {
-                val prefs = PreferencesManager(context)
-                val location = WidgetLocationHelper.getWidgetRefreshLocation(context, prefs)
-                    ?: return@withContext
-                val repository = WeatherRepository(prefs)
-                val result = repository.getSpotWidgetReport(location)
-                result.onSuccess { report ->
-                    if (prefs.setCachedWidgetWeatherReport(report)) {
-                        WidgetRefreshManager.clearFailurePause(context)
-                        WidgetLocationHelper.commitSuccessfulGpsLocation(prefs, location)
-                        prefs.setWidgetPageOffset(0)
-                    }
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-            }
-        }
+        WidgetRefreshManager.enqueueManualRefresh(context)
         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { glancePrefs ->
             glancePrefs.toMutablePreferences().apply {
                 this[WidgetKeys.PAGE_OFFSET] = 0

@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import io.github.tychomagnetic.metterweather.widget.WidgetClock
+import io.github.tychomagnetic.metterweather.widget.WidgetRefreshManager
 import io.github.tychomagnetic.metterweather.widget.shiftedWidgetOffset
 import org.junit.Assert.*
 import org.junit.Test
@@ -15,21 +16,19 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class WidgetClockTest {
-    @Test fun `clock is scheduled at hour boundary and survives refresh being off`() {
+    @Test fun `clock uses a non-waking inexact window at the next hour`() {
         val app = ApplicationProvider.getApplicationContext<Application>()
         shadowOf(android.appwidget.AppWidgetManager.getInstance(app)).bindAppWidgetId(1,
             android.content.ComponentName(app, io.github.tychomagnetic.metterweather.widget.HourlyForecastWidgetReceiver::class.java))
         io.github.tychomagnetic.metterweather.data.local.PreferencesManager(app).setWidgetRefreshInterval(
             io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.OFF)
         val alarms = shadowOf(app.getSystemService(AlarmManager::class.java))
-        for (precise in listOf(false, true)) {
-            org.robolectric.shadows.ShadowAlarmManager.setCanScheduleExactAlarms(precise)
-            WidgetClock.schedule(app)
-            WidgetClock.schedule(app)
-            assertEquals(1, alarms.scheduledAlarms.size)
-            assertEquals(WidgetClock.nextHour(System.currentTimeMillis()), requireNotNull(alarms.peekNextScheduledAlarm()).triggerAtTime)
-            assertEquals(precise, WidgetClock.canSchedulePrecisely(app))
-        }
+        WidgetClock.schedule(app)
+        WidgetClock.schedule(app)
+        assertEquals(1, alarms.scheduledAlarms.size)
+        val alarm = requireNotNull(alarms.peekNextScheduledAlarm())
+        assertEquals(WidgetClock.nextHour(System.currentTimeMillis()), alarm.triggerAtTime)
+        assertEquals(AlarmManager.RTC, alarm.type)
         WidgetClock.cancel(app)
         assertTrue(alarms.scheduledAlarms.isEmpty())
     }
@@ -39,6 +38,17 @@ class WidgetClockTest {
         assertEquals(3_600_000L, WidgetClock.nextHour(1_800_000L))
         assertEquals(7_200_000L, WidgetClock.nextHour(3_600_000L))
         assertEquals(86_400_000L, WidgetClock.nextHour(86_399_999L))
+    }
+
+    @Test fun `turning automatic refresh off retains the cached display clock`() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        shadowOf(android.appwidget.AppWidgetManager.getInstance(app)).bindAppWidgetId(2,
+            android.content.ComponentName(app, io.github.tychomagnetic.metterweather.widget.HourlyForecastWidgetReceiver::class.java))
+        val alarms = shadowOf(app.getSystemService(AlarmManager::class.java))
+        WidgetRefreshManager.scheduleAutoRefresh(
+            app, io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.OFF)
+        assertNotNull(alarms.peekNextScheduledAlarm())
+        WidgetClock.cancel(app)
     }
 
     @Test fun `arrows move a whole visible page and clamp at forecast ends`() {

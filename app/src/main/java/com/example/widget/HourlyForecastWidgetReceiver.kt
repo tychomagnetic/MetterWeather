@@ -20,7 +20,7 @@ class HourlyForecastWidgetReceiver : GlanceAppWidgetReceiver() {
 
     override fun onDisabled(context: Context) {
         WidgetClock.cancel(context)
-        WidgetRefreshManager.cancelAutoRefresh(context.applicationContext)
+        WidgetRefreshManager.cancelAllRefreshWork(context.applicationContext)
         super.onDisabled(context)
     }
 }

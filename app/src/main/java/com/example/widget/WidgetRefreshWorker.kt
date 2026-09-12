@@ -10,16 +10,18 @@ class WidgetRefreshWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        // Recovery work also repairs the display clock after a lost alarm.
+        val manual = inputData.getBoolean(WidgetRefreshManager.MANUAL_INPUT, false)
+        val interval = io.github.tychomagnetic.metterweather.data.local.PreferencesManager(applicationContext)
+            .getWidgetRefreshInterval()
+        if (!WidgetRefreshManager.allowsRefreshAttempt(interval, manual)) return Result.success()
+        // Keep the display alarm alive when the periodic job is the first
+        // component to run after process death or a missed alarm.
         WidgetClock.schedule(applicationContext)
-        if (io.github.tychomagnetic.metterweather.data.local.PreferencesManager(applicationContext)
-                .getWidgetRefreshInterval() == io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.OFF) {
-            return Result.success()
-        }
-        if (!WidgetRefreshManager.hasInstalledWidgets(applicationContext) ||
-            !WidgetRefreshManager.claimHourlyAttempt(applicationContext)) return Result.success()
+        if (!manual && (!WidgetRefreshManager.hasInstalledWidgets(applicationContext) ||
+            !WidgetRefreshManager.claimHourlyAttempt(applicationContext))) return Result.success()
         try {
-            WidgetRefreshManager.performWidgetRefresh(applicationContext)
+            val outcome = WidgetRefreshManager.performWidgetRefresh(applicationContext, ignoreFailurePauses = manual)
+            if (manual && outcome == WidgetRefreshOutcome.RETRYABLE_FAILURE) return Result.retry()
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
         } catch (error: Exception) {
