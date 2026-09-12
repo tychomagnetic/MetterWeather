@@ -6,6 +6,7 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import io.github.tychomagnetic.metterweather.data.model.LocationItem
 import io.github.tychomagnetic.metterweather.data.model.MapManifestCache
 import io.github.tychomagnetic.metterweather.data.model.PressureUnit
@@ -79,6 +80,10 @@ class PreferencesManager(context: Context) {
 
     private val _widgetRefreshIntervalFlow = MutableStateFlow(getWidgetRefreshInterval())
     val widgetRefreshIntervalFlow: StateFlow<WidgetRefreshInterval> = _widgetRefreshIntervalFlow.asStateFlow()
+
+    private val _cacheWriteErrorFlow = MutableStateFlow<String?>(null)
+    /** Non-null when the most recent report-cache write failed. */
+    val cacheWriteErrorFlow: StateFlow<String?> = _cacheWriteErrorFlow.asStateFlow()
 
     private val _widgetGpsEnabledFlow = MutableStateFlow(isWidgetGpsEnabled())
     val widgetGpsEnabledFlow: StateFlow<Boolean> = _widgetGpsEnabledFlow.asStateFlow()
@@ -298,13 +303,8 @@ class PreferencesManager(context: Context) {
         }
     }
 
-    fun setCachedWeatherReport(report: WeatherReport) {
-        try {
-            val json = weatherReportAdapter.toJson(report)
-            prefs.edit().putString(KEY_CACHED_WEATHER_REPORT, json).apply()
-        } catch (_: Exception) {
-        }
-    }
+    fun setCachedWeatherReport(report: WeatherReport): Boolean =
+        writeWeatherReport(KEY_CACHED_WEATHER_REPORT, report)
 
     fun getFreshCachedBpfWeatherReport(
         location: LocationItem,
@@ -336,13 +336,11 @@ class PreferencesManager(context: Context) {
         }
     }
 
-    fun setCachedBpfWeatherReport(report: WeatherReport) {
-        if (report.dataSource != WeatherDataSource.MET_OFFICE_BPF) return
-        try {
-            val json = weatherReportAdapter.toJson(report)
-            prefs.edit().putString(bpfCacheKey(report.location), json).apply()
-        } catch (_: Exception) {
-        }
+    fun setCachedBpfWeatherReport(report: WeatherReport): Boolean {
+        if (report.dataSource != WeatherDataSource.MET_OFFICE_BPF) return false
+        val written = writeWeatherReport(bpfCacheKey(report.location), report)
+        if (written) trimBpfCache()
+        return written
     }
 
     private fun bpfCacheKey(location: LocationItem): String =
@@ -362,11 +360,41 @@ class PreferencesManager(context: Context) {
         }
     }
 
-    fun setCachedWidgetWeatherReport(report: WeatherReport) {
-        try {
-            val json = weatherReportAdapter.toJson(report)
-            prefs.edit().putString(KEY_CACHED_WIDGET_WEATHER_REPORT, json).apply()
-        } catch (_: Exception) {
+    fun setCachedWidgetWeatherReport(report: WeatherReport): Boolean =
+        writeWeatherReport(KEY_CACHED_WIDGET_WEATHER_REPORT, report)
+
+    private fun writeWeatherReport(key: String, report: WeatherReport): Boolean = try {
+        val json = weatherReportAdapter.toJson(report)
+        check(prefs.edit().putString(key, json).commit()) { "SharedPreferences commit failed" }
+        _cacheWriteErrorFlow.value = null
+        true
+    } catch (error: Exception) {
+        val message = "Could not cache weather data: ${error.localizedMessage ?: error.javaClass.simpleName}"
+        Log.w(LOG_TAG, message, error)
+        _cacheWriteErrorFlow.value = message
+        false
+    }
+
+    private fun trimBpfCache() {
+        val entriesByAge = prefs.all.asSequence()
+            .filter { (key, value) -> key.startsWith(KEY_CACHED_BPF_LOCATION_PREFIX) && value is String }
+            .map { (key, value) ->
+                val fetchedAt = runCatching {
+                    weatherReportAdapter.fromJson(value as String)?.fetchedAtMillis
+                }.getOrNull() ?: Long.MIN_VALUE
+                key to fetchedAt
+            }
+            .sortedByDescending { it.second }
+            .toList()
+        if (entriesByAge.size <= MAX_BPF_CACHE_ENTRIES) return
+
+        val removed = prefs.edit().apply {
+            entriesByAge.drop(MAX_BPF_CACHE_ENTRIES).forEach { (key, _) -> remove(key) }
+        }.commit()
+        if (!removed) {
+            val message = "Could not trim the BPF weather cache"
+            Log.w(LOG_TAG, message)
+            _cacheWriteErrorFlow.value = message
         }
     }
 
@@ -471,6 +499,8 @@ class PreferencesManager(context: Context) {
     }
 
     companion object {
+        private const val LOG_TAG = "PreferencesManager"
+        internal const val MAX_BPF_CACHE_ENTRIES = 8
         private const val PREFS_NAME = "met_office_weather_prefs"
         private const val SECURE_PREFS_NAME = "met_office_weather_secure"
         private const val KEY_MET_OFFICE_API_KEY = "met_office_api_key"
@@ -492,8 +522,8 @@ class PreferencesManager(context: Context) {
         private const val KEY_CACHED_WEATHER_REPORT = "cached_weather_report"
         private const val KEY_CACHED_WIDGET_WEATHER_REPORT = "cached_widget_weather_report"
         private const val KEY_CACHED_WIDGET_GPS_LOCATION = "cached_widget_gps_location"
-        // v5 invalidates BPF reports unnecessarily extended with Spot endpoint data.
-        private const val KEY_CACHED_BPF_LOCATION_PREFIX = "cached_bpf_location_v5_"
+        // v6 invalidates trace-precipitation probabilities from older mappings.
+        private const val KEY_CACHED_BPF_LOCATION_PREFIX = "cached_bpf_location_v6_"
         private const val KEY_WIDGET_PAGE_OFFSET = "widget_page_offset"
         private const val KEY_WIDGET_REFRESH_INTERVAL = "widget_refresh_interval"
         private const val KEY_WIDGET_USE_GPS = "widget_use_gps"

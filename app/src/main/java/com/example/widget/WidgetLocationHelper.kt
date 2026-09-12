@@ -73,14 +73,27 @@ object WidgetLocationHelper {
     private suspend fun requestCurrentLocation(
         context: Context,
         request: com.google.android.gms.location.CurrentLocationRequest
-    ): Location? = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
-        val cancellation = com.google.android.gms.tasks.CancellationTokenSource()
-        continuation.invokeOnCancellation { cancellation.cancel() }
-        com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context)
-            .getCurrentLocation(request, cancellation.token)
-            .addOnSuccessListener { continuation.resumeWith(Result.success(it)) }
-            .addOnFailureListener { continuation.resumeWith(Result.failure(it)) }
-            .addOnCanceledListener { continuation.cancel() }
+    ): Location? {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return null
+
+        return try {
+            kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                val cancellation = com.google.android.gms.tasks.CancellationTokenSource()
+                continuation.invokeOnCancellation { cancellation.cancel() }
+                com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context)
+                    .getCurrentLocation(request, cancellation.token)
+                    .addOnSuccessListener { continuation.resumeWith(Result.success(it)) }
+                    .addOnFailureListener { continuation.resumeWith(Result.failure(it)) }
+                    .addOnCanceledListener { continuation.cancel() }
+            }
+        } catch (error: SecurityException) {
+            // Permission can be revoked after the check while a background
+            // refresh is starting. Treat that race as an unavailable fix.
+            Log.w(TAG, "Location permission was revoked before the widget fix", error)
+            null
+        }
     }
     private fun toWidgetLocation(context: Context, location: Location): LocationItem = LocationItem(
         id = "widget_gps_current",

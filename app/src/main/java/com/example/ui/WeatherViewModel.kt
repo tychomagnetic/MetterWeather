@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.TimeZone
 
@@ -357,7 +358,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
         ).show()
     }
 
-    private fun applyWeatherReport(report: WeatherReport, location: LocationItem) {
+    private suspend fun applyWeatherReport(report: WeatherReport, location: LocationItem) {
         _uiState.update {
             it.copy(
                 weatherReport = report,
@@ -367,10 +368,14 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                 errorMessage = null
             )
         }
-        preferencesManager.setSelectedLocation(location)
-        preferencesManager.setCachedWeatherReport(report)
-        if (report.dataSource == WeatherDataSource.MET_OFFICE_BPF) {
-            preferencesManager.setCachedBpfWeatherReport(report)
+        // Moshi serialization of a seven-day report can be sizeable. Keep it
+        // off the main thread after publishing the immediately usable UI state.
+        withContext(Dispatchers.IO) {
+            preferencesManager.setSelectedLocation(location)
+            preferencesManager.setCachedWeatherReport(report)
+            if (report.dataSource == WeatherDataSource.MET_OFFICE_BPF) {
+                preferencesManager.setCachedBpfWeatherReport(report)
+            }
         }
     }
 

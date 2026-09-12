@@ -113,11 +113,15 @@ object WidgetRefreshManager {
                 val repository = WeatherRepository(prefs)
                 val result = repository.getSpotWidgetReport(location)
                 result.onSuccess { report ->
-                    prefs.setCachedWidgetWeatherReport(report)
-                    WidgetLocationHelper.commitSuccessfulGpsLocation(prefs, location)
-                    prefs.setWidgetPageOffset(0)
-                    outcome = WidgetRefreshOutcome.SUCCESS
-                    Log.d(TAG, "Widget background refresh succeeded for ${location.name}")
+                    if (prefs.setCachedWidgetWeatherReport(report)) {
+                        WidgetLocationHelper.commitSuccessfulGpsLocation(prefs, location)
+                        prefs.setWidgetPageOffset(0)
+                        outcome = WidgetRefreshOutcome.SUCCESS
+                        Log.d(TAG, "Widget background refresh succeeded for ${location.name}")
+                    } else {
+                        outcome = WidgetRefreshOutcome.FAILED
+                        Log.w(TAG, "Widget forecast was fetched but could not be cached")
+                    }
                 }.onFailure { error ->
                     outcome = classifyWidgetFailure(error)
                     when (outcome) {

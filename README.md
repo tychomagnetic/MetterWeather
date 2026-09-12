@@ -72,12 +72,24 @@ The free BPF allowance is currently much tighter than Spot (listed by the Met Of
 - A new BPF forecast normally uses two API calls: one percentile request and one probability request.
 - BPF fields can have different timestamp counts and end times. Unsupported terminal hours are trimmed before checking for missing data; genuine gaps within the forecast can still use Spot fallback.
 - BPF results are cached separately for each location for two hours.
+- The eight most recently fetched BPF locations are retained; older location caches are removed automatically.
 - Switching back to a recently viewed location reuses its fresh cache rather than calling the API again.
 - A manual refresh deliberately bypasses the cache and makes a new request.
 - Merely starting the app does not refresh every saved location.
 - The widget never calls BPF; it refreshes from Global Spot on the hour and maintains a separate widget cache.
 
 If the selected Met Office source has no valid key or its request fails, the app can fall back to Open-Meteo.
+
+Hourly timelines contain only timestamps supplied with complete provider data. If
+a provider supplies a daily summary without usable hourly coverage, the app keeps
+the daily forecast and marks hourly data as unavailable instead of estimating it.
+
+BPF precipitation chances use the Met Office consumer forecast thresholds:
+0.1 mm over one hour and 0.3 mm over three hours, rather than any trace above
+zero. Later forecast hours can share a three-hour probability, marked **3h**;
+expanded hourly details show its actual local start and end time. A three-hour
+percentage describes the entire interval, not each hour independently. Existing
+BPF caches from the earlier threshold are ignored and refreshed when viewed.
 
 ## Running locally
 

@@ -88,6 +88,7 @@ import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 import io.github.tychomagnetic.metterweather.ui.theme.RainCyan
 import io.github.tychomagnetic.metterweather.ui.theme.SolarGold
+import io.github.tychomagnetic.metterweather.ui.precipitationDescription
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -120,39 +121,6 @@ fun DayHourlyDetailSheet(
     val targetDate = day.date.take(10)
     val dayHourly = allHourlyList.filter {
         TimezoneUtils.getForecastLocalDate(it.fullTime, location) == targetDate
-    }.ifEmpty {
-        (0..23).map { h ->
-            val hourStr = String.format(java.util.Locale.US, "%02d:00", h)
-            val fullTime = "${targetDate}T$hourStr:00Z"
-            val isNight = h < 6 || h >= 21
-            val tempFraction = when (h) {
-                in 0..5 -> ((5 - h) / 5.0) * 0.20
-                in 6..14 -> Math.sin(((h - 5.0) / 9.0) * Math.PI / 2.0).coerceIn(0.0, 1.0)
-                else -> (Math.cos(((h - 14.0) / 10.0) * Math.PI / 2.0) * 0.85 + 0.15).coerceIn(0.0, 1.0)
-            }
-            val calculatedTemp = day.minTempCelsius + (tempFraction * (day.maxTempCelsius - day.minTempCelsius))
-            val amPm = if (h >= 12) "PM" else "AM"
-            val h12 = when {
-                h == 0 -> 12
-                h > 12 -> h - 12
-                else -> h
-            }
-            HourlyForecastItem(
-                timeLabel = "$h12 $amPm",
-                fullTime = fullTime,
-                date = targetDate,
-                temperatureCelsius = Math.round(calculatedTemp * 10.0) / 10.0,
-                feelsLikeCelsius = Math.round(calculatedTemp * 10.0) / 10.0,
-                weatherCode = if (isNight) day.nightWeatherCode else day.dayWeatherCode,
-                precipitationChance = day.precipitationChance,
-                windSpeedMph = Math.round(day.maxWindGustMph * 0.65 * 10.0) / 10.0,
-                windDirectionDegrees = 225,
-                humidityPercent = (85 - (tempFraction * 35)).toInt().coerceIn(35, 95),
-                uvIndex = if (isNight || h < 8 || h > 18) 0 else day.uvIndex,
-                pressureHpa = 1013.25,
-                isNow = false
-            )
-        }
     }
 
     ModalBottomSheet(
@@ -561,6 +529,17 @@ fun DayHourlyDetailSheet(
                         .padding(vertical = 4.dp)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
+                        if (dayHourly.isEmpty()) {
+                            Text(
+                                text = "Hourly data is unavailable for this day. The daily summary above is still valid.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = BentoTextSecondary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp)
+                                    .testTag("detail_hourly_data_unavailable")
+                            )
+                        }
                         dayHourly.forEachIndexed { index, item ->
                             val rowKey = "${item.date}_${item.fullTime}_${item.timeLabel}_$index"
                             val isExpanded = showAllHourDetails || (expandedHourKey == rowKey)
@@ -626,16 +605,16 @@ fun DayHourlyDetailSheet(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.width(54.dp)
                                     ) {
-                                        if (item.precipitationChance > 0) {
-                                            val isHighPrecip = item.precipitationChance > 30
-                                            val precipColor = if (isHighPrecip) RainCyan else BentoTextSecondary
-                                            Icon(
-                                                imageVector = Icons.Default.WaterDrop,
-                                                contentDescription = null,
-                                                tint = precipColor,
-                                                modifier = Modifier.size(14.5.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(2.dp))
+                                        val isHighPrecip = item.precipitationChance > 30
+                                        val precipColor = if (isHighPrecip) RainCyan else BentoTextSecondary
+                                        Icon(
+                                            imageVector = Icons.Default.WaterDrop,
+                                            contentDescription = null,
+                                            tint = precipColor,
+                                            modifier = Modifier.size(14.5.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Column {
                                             Text(
                                                 text = "${item.precipitationChance}%",
                                                 style = MaterialTheme.typography.labelSmall.copy(
@@ -645,6 +624,9 @@ fun DayHourlyDetailSheet(
                                                 ),
                                                 maxLines = 1
                                             )
+                                            if (item.precipitationPeriod?.hours == 3) {
+                                                Text("3h period", fontSize = 8.sp, color = precipColor)
+                                            }
                                         }
                                     }
 
@@ -695,6 +677,14 @@ fun DayHourlyDetailSheet(
                                             .fillMaxWidth()
                                             .padding(start = 14.dp, end = 14.dp, bottom = 12.dp)
                                     ) {
+                                        if (item.precipitationPeriod != null) {
+                                            Text(
+                                                text = item.precipitationDescription(location),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = BentoTextSecondary,
+                                                modifier = Modifier.padding(bottom = 8.dp)
+                                            )
+                                        }
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()

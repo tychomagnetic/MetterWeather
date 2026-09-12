@@ -467,9 +467,10 @@ class RefreshWeatherActionCallback : ActionCallback {
                 val repository = WeatherRepository(prefs)
                 val result = repository.getSpotWidgetReport(location)
                 result.onSuccess { report ->
-                    prefs.setCachedWidgetWeatherReport(report)
-                    WidgetLocationHelper.commitSuccessfulGpsLocation(prefs, location)
-                    prefs.setWidgetPageOffset(0)
+                    if (prefs.setCachedWidgetWeatherReport(report)) {
+                        WidgetLocationHelper.commitSuccessfulGpsLocation(prefs, location)
+                        prefs.setWidgetPageOffset(0)
+                    }
                 }
             } catch (error: CancellationException) {
                 throw error

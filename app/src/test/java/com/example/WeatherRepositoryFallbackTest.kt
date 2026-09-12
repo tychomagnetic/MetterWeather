@@ -66,6 +66,9 @@ class WeatherRepositoryFallbackTest {
         assertEquals("2099-09-15T14:00:00Z", report.hourly.last().fullTime)
         assertTrue(report.hourly.all { it.weatherCode.code in 0..30 })
         assertEquals(7, report.daily.size)
+        assertEquals(1, report.hourly.first().precipitationPeriod?.hours)
+        assertEquals(3, report.hourly.last().precipitationPeriod?.hours)
+        assertTrue(report.hourly.all { it.precipitationPeriod != null })
     }
 
     // London response captured on 2026-09-08 with the production request's
@@ -471,7 +474,7 @@ class WeatherRepositoryFallbackTest {
             return """
                 {
                   "type":"Coverage",
-                  "domain":{"axes":{"t":{"values":["$intervalEnd"],"bounds":["$time","$intervalEnd"]},"${parameter}Values":{"values":[">0.0"]}}},
+                  "domain":{"axes":{"t":{"values":["$intervalEnd"],"bounds":["$time","$intervalEnd"]},"${parameter}Values":{"values":["${if (parameter.endsWith("Pt03h")) ">3.0E-4" else ">1.0E-4"}"]}}},
                   "ranges":{"$parameter":{"axisNames":["${parameter}Values","t"],"shape":[1,1],"values":[0.8]}}
                 }
             """.trimIndent()
@@ -579,7 +582,7 @@ class WeatherRepositoryFallbackTest {
         private fun probabilityCoverage(parameter: String, times: List<String>, bounds: List<String>): String = """
             {
               "type":"Coverage",
-              "domain":{"axes":{"t":{"values":${jsonStrings(times)},"bounds":${jsonStrings(bounds)}},"${parameter}Values":{"values":[">0.0"]}}},
+              "domain":{"axes":{"t":{"values":${jsonStrings(times)},"bounds":${jsonStrings(bounds)}},"${parameter}Values":{"values":["${if (parameter.endsWith("Pt03h")) ">3.0E-4" else ">1.0E-4"}"]}}},
               "ranges":{"$parameter":{"axisNames":["${parameter}Values","t"],"shape":[1,${times.size}],"values":[${List(times.size) { 0.2 }.joinToString(",")}]}}
             }
         """.trimIndent()

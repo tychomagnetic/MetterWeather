@@ -144,6 +144,13 @@ data class CurrentWeather(
         }
 }
 
+data class PrecipitationPeriod(
+    val start: String,
+    val end: String,
+    val hours: Int,
+    val thresholdMm: Double
+)
+
 data class HourlyForecastItem(
     val timeLabel: String,
     val fullTime: String,
@@ -157,7 +164,8 @@ data class HourlyForecastItem(
     val humidityPercent: Int,
     val uvIndex: Int,
     val pressureHpa: Double = 1013.25,
-    val isNow: Boolean = false
+    val isNow: Boolean = false,
+    val precipitationPeriod: PrecipitationPeriod? = null
 ) {
     val windDirectionCompass: String
         get() {

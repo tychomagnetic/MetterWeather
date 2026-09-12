@@ -60,6 +60,7 @@ import io.github.tychomagnetic.metterweather.ui.theme.BentoTextSecondary
 import io.github.tychomagnetic.metterweather.ui.theme.BentoTile
 import io.github.tychomagnetic.metterweather.ui.theme.RainCyan
 import io.github.tychomagnetic.metterweather.ui.theme.SolarGold
+import io.github.tychomagnetic.metterweather.ui.precipitationLabel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -73,6 +74,47 @@ data class HourlyTimelineEntry(
     val dayLabel: String,
     val dateStr: String
 )
+
+internal fun buildHourlyTimelineEntries(
+    dailyList: List<DailyForecastItem>,
+    hourlyList: List<HourlyForecastItem>,
+    location: LocationItem?
+): List<HourlyTimelineEntry> {
+    val entries = mutableListOf<HourlyTimelineEntry>()
+    if (dailyList.isNotEmpty()) {
+        dailyList.forEachIndexed { dayIndex, day ->
+            val targetDate = day.date.take(10)
+            hourlyList
+                .filter { localDateFromTime(it.fullTime, location) == targetDate }
+                .forEach { hour ->
+                    val hourOfDay = extractHourFromTime(hour.fullTime, location)
+                    val localDate = localDateFromTime(hour.fullTime, location)
+                    entries += HourlyTimelineEntry(
+                        item = hour,
+                        dayIndex = dayIndex,
+                        hourOfDay = hourOfDay,
+                        isMidnight = hourOfDay == 0,
+                        dayLabel = weekdayAbbreviation(localDate),
+                        dateStr = localDate
+                    )
+                }
+        }
+    } else {
+        hourlyList.forEach { hour ->
+            val hourOfDay = extractHourFromTime(hour.fullTime, location)
+            val localDate = localDateFromTime(hour.fullTime, location)
+            entries += HourlyTimelineEntry(
+                item = hour,
+                dayIndex = 0,
+                hourOfDay = hourOfDay,
+                isMidnight = hourOfDay == 0,
+                dayLabel = weekdayAbbreviation(localDate),
+                dateStr = localDate
+            )
+        }
+    }
+    return entries
+}
 
 @Composable
 fun HourlyForecastRow(
@@ -91,61 +133,7 @@ fun HourlyForecastRow(
 
     // Build the complete continuous multi-day timeline
     val timelineEntries = remember(dailyList, hourlyList, location) {
-        val entries = mutableListOf<HourlyTimelineEntry>()
-
-        if (dailyList.isNotEmpty()) {
-            dailyList.forEachIndexed { dIndex, dayItem ->
-                val targetDate = dayItem.date.take(10)
-                val matched = hourlyList.filter {
-                    localDateFromTime(it.fullTime, location) == targetDate
-                }
-
-                // Do not invent values for gaps in an otherwise valid feed. A
-                // three-hour forecast should remain three-hourly, and DST days
-                // can legitimately contain 23 or 25 local hours. Only fall back
-                // to a synthetic day when the source supplied no hourly data at
-                // all for that date.
-                val dayHours: List<HourlyForecastItem> = if (matched.isNotEmpty()) {
-                    matched
-                } else {
-                    (0..23).map { h ->
-                        createSyntheticHourItem(dayItem, targetDate, h, location)
-                    }
-                }
-
-                dayHours.forEach { hItem ->
-                    val hVal = extractHourFromTime(hItem.fullTime, location)
-                    val itemLocalDate = localDateFromTime(hItem.fullTime, location)
-                    entries.add(
-                        HourlyTimelineEntry(
-                            item = hItem,
-                            dayIndex = dIndex,
-                            hourOfDay = hVal,
-                            isMidnight = (hVal == 0),
-                            // A midnight badge identifies the calendar day of
-                            // this hour, not the bucket it was assembled under.
-                            dayLabel = weekdayAbbreviation(itemLocalDate),
-                            dateStr = itemLocalDate
-                        )
-                    )
-                }
-            }
-        } else {
-            hourlyList.forEachIndexed { idx, hItem ->
-                val hVal = extractHourFromTime(hItem.fullTime, location)
-                entries.add(
-                    HourlyTimelineEntry(
-                        item = hItem,
-                        dayIndex = 0,
-                        hourOfDay = hVal,
-                        isMidnight = (hVal == 0),
-                        dayLabel = weekdayAbbreviation(localDateFromTime(hItem.fullTime, location)),
-                        dateStr = localDateFromTime(hItem.fullTime, location)
-                    )
-                )
-            }
-        }
-        entries
+        buildHourlyTimelineEntries(dailyList, hourlyList, location)
     }
 
     val hourlyListState = rememberLazyListState()
@@ -378,32 +366,45 @@ fun HourlyForecastRow(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Continuous Horizontal Timeline across days
-            LazyRow(
-                state = hourlyListState,
-                contentPadding = PaddingValues(0.dp),
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .border(
-                        1.dp,
-                        BentoBorder.copy(alpha = 0.6f),
-                        RoundedCornerShape(14.dp)
-                    )
-            ) {
-                items(
-                    items = timelineEntries,
-                    key = { "${it.dayIndex}_${it.hourOfDay}_${it.item.fullTime}" }
-                ) { entry ->
-                    HourlyItemCard(
-                        entry = entry,
-                        tempUnit = tempUnit,
-                        windUnit = windUnit,
-                        connected = true
-                    )
+            val selectedDayHasHourlyData = timelineEntries.any { it.dayIndex == currentDayIndex }
+            if (selectedDayHasHourlyData) {
+                // Continuous Horizontal Timeline across days
+                LazyRow(
+                    state = hourlyListState,
+                    contentPadding = PaddingValues(0.dp),
+                    horizontalArrangement = Arrangement.spacedBy(0.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(
+                            1.dp,
+                            BentoBorder.copy(alpha = 0.6f),
+                            RoundedCornerShape(14.dp)
+                        )
+                ) {
+                    items(
+                        items = timelineEntries,
+                        key = { "${it.dayIndex}_${it.hourOfDay}_${it.item.fullTime}" }
+                    ) { entry ->
+                        HourlyItemCard(
+                            entry = entry,
+                            tempUnit = tempUnit,
+                            windUnit = windUnit,
+                            connected = true
+                        )
+                    }
                 }
+            } else {
+                Text(
+                    text = "Hourly data is unavailable for this day. The daily summary is still available.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BentoTextSecondary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                        .testTag("hourly_data_unavailable")
+                )
             }
         }
     }
@@ -530,8 +531,8 @@ fun HourlyItemCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Always identify this value as precipitation. A missing API value is
-            // normalized to 0% when the forecast item is mapped.
+            // The 3h suffix identifies a whole-period probability repeated on
+            // constituent hour cards, rather than an independent hourly chance.
             val isHighPrecip = item.precipitationChance > 30
             val precipColor = if (isHighPrecip) RainCyan else BentoTextSecondary.copy(alpha = 0.65f)
             Row(
@@ -540,15 +541,15 @@ fun HourlyItemCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.WaterDrop,
-                    contentDescription = "Precipitation chance: ${item.precipitationChance}%",
+                    contentDescription = "Precipitation chance: ${item.precipitationLabel()}",
                     tint = precipColor,
                     modifier = Modifier.size(12.dp)
                 )
                 Spacer(modifier = Modifier.width(1.5.dp))
                 Text(
-                    text = "${item.precipitationChance}%",
+                    text = item.precipitationLabel(),
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 11.5.sp,
+                        fontSize = if (item.precipitationPeriod?.hours == 3) 9.5.sp else 11.5.sp,
                         fontWeight = if (isHighPrecip) FontWeight.Bold else FontWeight.SemiBold,
                         color = precipColor
                     ),
@@ -660,59 +661,4 @@ private fun weekdayAbbreviation(date: String): String {
     } catch (_: Exception) {
         date.take(3)
     }
-}
-
-private fun createSyntheticHourItem(
-    day: DailyForecastItem,
-    targetDate: String,
-    h: Int,
-    location: LocationItem? = null
-): HourlyForecastItem {
-    val isNight = h < 6 || h >= 21
-    val tempFraction = when (h) {
-        in 0..5 -> ((5 - h) / 5.0) * 0.20
-        in 6..14 -> Math.sin(((h - 5.0) / 9.0) * Math.PI / 2.0).coerceIn(0.0, 1.0)
-        else -> (Math.cos(((h - 14.0) / 10.0) * Math.PI / 2.0) * 0.85 + 0.15).coerceIn(0.0, 1.0)
-    }
-    val calculatedTemp = day.minTempCelsius + (tempFraction * (day.maxTempCelsius - day.minTempCelsius))
-    val amPm = if (h >= 12) "PM" else "AM"
-    val h12 = when {
-        h == 0 -> 12
-        h > 12 -> h - 12
-        else -> h
-    }
-    val timeLabel = "$h12 $amPm"
-
-    val fullTime = if (location != null) {
-        val tz = TimezoneUtils.getTimeZoneForLocation(location)
-        val cal = java.util.Calendar.getInstance(tz).apply {
-            val parts = targetDate.split("-")
-            val y = parts.getOrNull(0)?.toIntOrNull() ?: 2026
-            val m = (parts.getOrNull(1)?.toIntOrNull() ?: 1) - 1
-            val d = parts.getOrNull(2)?.toIntOrNull() ?: 1
-            set(y, m, d, h, 0, 0)
-            set(java.util.Calendar.MILLISECOND, 0)
-        }
-        java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
-            timeZone = java.util.TimeZone.getTimeZone("UTC")
-        }.format(cal.time)
-    } else {
-        val hourStr = String.format(java.util.Locale.US, "%02d:00", h)
-        "${targetDate}T$hourStr:00Z"
-    }
-
-    return HourlyForecastItem(
-        timeLabel = timeLabel,
-        fullTime = fullTime,
-        date = targetDate,
-        temperatureCelsius = Math.round(calculatedTemp * 10.0) / 10.0,
-        feelsLikeCelsius = Math.round(calculatedTemp * 10.0) / 10.0,
-        weatherCode = if (isNight) day.nightWeatherCode else day.dayWeatherCode,
-        precipitationChance = day.precipitationChance,
-        windSpeedMph = Math.round(day.maxWindGustMph * 0.65 * 10.0) / 10.0,
-        windDirectionDegrees = 225,
-        humidityPercent = (85 - (tempFraction * 35)).toInt().coerceIn(35, 95),
-        uvIndex = if (isNight || h < 8 || h > 18) 0 else day.uvIndex,
-        isNow = false
-    )
 }
