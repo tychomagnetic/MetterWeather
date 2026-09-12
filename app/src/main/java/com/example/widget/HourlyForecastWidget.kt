@@ -76,7 +76,6 @@ class HourlyForecastWidget : GlanceAppWidget() {
     override val stateDefinition = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        WidgetClock.schedule(context)
         provideContent {
             val glancePrefs = currentState<Preferences>()
             val pageOffset = glancePrefs[WidgetKeys.PAGE_OFFSET] ?: 0
@@ -468,6 +467,7 @@ class RefreshWeatherActionCallback : ActionCallback {
                 val result = repository.getSpotWidgetReport(location)
                 result.onSuccess { report ->
                     if (prefs.setCachedWidgetWeatherReport(report)) {
+                        WidgetRefreshManager.clearFailurePause(context)
                         WidgetLocationHelper.commitSuccessfulGpsLocation(prefs, location)
                         prefs.setWidgetPageOffset(0)
                     }

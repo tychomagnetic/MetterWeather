@@ -4,7 +4,6 @@ import android.content.Context
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.util.Log
-import androidx.work.BackoffPolicy
 import androidx.work.WorkManager
 import io.github.tychomagnetic.metterweather.data.local.PreferencesManager
 import io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval
@@ -29,6 +28,7 @@ object WidgetRefreshManager {
 
     private const val TAG = "WidgetRefreshManager"
     private const val WORK_NAME = "hourly_widget_refresh"
+    private const val RECOVERY_WORK = "widget_hourly_recovery"
 
     internal fun hasInstalledWidgets(context: Context): Boolean =
         AppWidgetManager.getInstance(context).getAppWidgetIds(
@@ -54,8 +54,13 @@ object WidgetRefreshManager {
             return
         }
 
-        // Migrate away from the drifting periodic schedule. WidgetClock owns each hour.
+        // A durable recovery check shares the worker's hourly attempt gate with
+        // the clock. It repairs lost alarms without adding duplicate downloads.
         workManager.cancelUniqueWork(WORK_NAME)
+        workManager.enqueueUniquePeriodicWork(
+            RECOVERY_WORK, androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            androidx.work.PeriodicWorkRequestBuilder<WidgetRefreshWorker>(1, TimeUnit.HOURS).build())
+        enqueueHourlyRefresh(context)
     }
 
     private const val HOURLY_REQUEST = "widget_clock_refresh"
@@ -64,18 +69,33 @@ object WidgetRefreshManager {
         if (!hasInstalledWidgets(context) ||
             PreferencesManager(context).getWidgetRefreshInterval() == WidgetRefreshInterval.OFF) return
         val request = androidx.work.OneTimeWorkRequestBuilder<WidgetRefreshWorker>()
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15L, TimeUnit.MINUTES)
         if (android.os.Build.VERSION.SDK_INT >= 31) {
             request.setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
         }
         WorkManager.getInstance(context).enqueueUniqueWork(
-            HOURLY_REQUEST, androidx.work.ExistingWorkPolicy.REPLACE, request.build())
+            HOURLY_REQUEST, androidx.work.ExistingWorkPolicy.KEEP, request.build())
+    }
+
+    @Synchronized
+    internal fun claimHourlyAttempt(context: Context, now: Long = System.currentTimeMillis()): Boolean {
+        val state = context.getSharedPreferences("widget_attempt_state", Context.MODE_PRIVATE)
+        val hour = now / 3_600_000L
+        if (state.contains("hour") && state.getLong("hour", -1) == hour) return false
+        // Record before GPS/network work so failures and overlapping triggers
+        // cannot cause a retry storm. A new clock hour is always eligible.
+        return state.edit().putLong("hour", hour).commit()
+    }
+
+    internal fun clearFailurePause(context: Context) {
+        context.getSharedPreferences("widget_refresh_state", Context.MODE_PRIVATE)
+            .edit().remove("credentials_paused").remove("quota_until").apply()
     }
 
     fun cancelAutoRefresh(context: Context) {
         runCatching {
             WorkManager.getInstance(context.applicationContext).apply {
                 cancelUniqueWork(WORK_NAME)
+                cancelUniqueWork(RECOVERY_WORK)
                 cancelUniqueWork(HOURLY_REQUEST)
             }
         }.onFailure {
@@ -114,6 +134,7 @@ object WidgetRefreshManager {
                 val result = repository.getSpotWidgetReport(location)
                 result.onSuccess { report ->
                     if (prefs.setCachedWidgetWeatherReport(report)) {
+                        clearFailurePause(context)
                         WidgetLocationHelper.commitSuccessfulGpsLocation(prefs, location)
                         prefs.setWidgetPageOffset(0)
                         outcome = WidgetRefreshOutcome.SUCCESS

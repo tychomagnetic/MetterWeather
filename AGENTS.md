@@ -146,7 +146,9 @@ under `app/src/debug/res/`.
   the main app source. Do not introduce BPF or Open-Meteo fallback into it.
 - Keep clock redraws separate from network refreshes. Cached hours must advance
   even when automatic downloads are off. Hourly alarms coordinate automatic
-  refresh; avoid adding a second periodic download schedule.
+  refresh. A durable hourly recovery worker and launcher updates share a
+  persisted hourly attempt gate with the alarm, so recovery cannot duplicate
+  downloads in the same hour. Failed attempts become eligible next hour.
 - `WidgetClock`, `WidgetRefreshManager`, `WidgetRefreshWorker` and receivers
   jointly handle scheduling. Preserve off-state cancellation, reboot/timezone
   handling, and operation without exact-alarm permission.

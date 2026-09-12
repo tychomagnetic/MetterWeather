@@ -10,17 +10,21 @@ class WidgetRefreshWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
+        // Recovery work also repairs the display clock after a lost alarm.
+        WidgetClock.schedule(applicationContext)
         if (io.github.tychomagnetic.metterweather.data.local.PreferencesManager(applicationContext)
                 .getWidgetRefreshInterval() == io.github.tychomagnetic.metterweather.data.model.WidgetRefreshInterval.OFF) {
             return Result.success()
         }
-        return when (WidgetRefreshManager.performWidgetRefresh(applicationContext)) {
-        WidgetRefreshOutcome.SUCCESS,
-        WidgetRefreshOutcome.SKIPPED,
-        WidgetRefreshOutcome.CREDENTIALS_REQUIRED,
-        WidgetRefreshOutcome.QUOTA_EXCEEDED,
-        WidgetRefreshOutcome.FAILED -> Result.success()
-        WidgetRefreshOutcome.RETRYABLE_FAILURE -> Result.retry()
+        if (!WidgetRefreshManager.hasInstalledWidgets(applicationContext) ||
+            !WidgetRefreshManager.claimHourlyAttempt(applicationContext)) return Result.success()
+        try {
+            WidgetRefreshManager.performWidgetRefresh(applicationContext)
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.w("WidgetRefreshWorker", "Hourly attempt failed; next hour remains eligible", error)
         }
+        return Result.success()
     }
 }
