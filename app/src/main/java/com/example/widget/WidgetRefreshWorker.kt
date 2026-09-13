@@ -20,6 +20,9 @@ class WidgetRefreshWorker(
         if (!manual && (!WidgetRefreshManager.hasInstalledWidgets(applicationContext) ||
             !WidgetRefreshManager.claimHourlyAttempt(applicationContext))) return Result.success()
         try {
+            // Start a Glance session observing WorkManager while this request runs,
+            // including requests that were queued while the device was offline.
+            if (manual) HourlyForecastWidget.updateAllWidgets(applicationContext)
             val outcome = WidgetRefreshManager.performWidgetRefresh(applicationContext, ignoreFailurePauses = manual)
             if (manual && outcome == WidgetRefreshOutcome.RETRYABLE_FAILURE) return Result.retry()
         } catch (error: kotlinx.coroutines.CancellationException) {

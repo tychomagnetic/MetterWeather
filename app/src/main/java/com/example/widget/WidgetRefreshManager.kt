@@ -18,6 +18,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
+import androidx.lifecycle.Observer
+import androidx.work.WorkInfo
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 
 enum class WidgetRefreshOutcome {
     SUCCESS,
@@ -35,6 +40,13 @@ object WidgetRefreshManager {
     private const val RECOVERY_WORK = "widget_hourly_recovery"
     private const val MANUAL_WORK = "widget_manual_refresh"
     internal const val MANUAL_INPUT = "manual_refresh"
+
+    internal fun observeManualRefresh(context: Context) = callbackFlow {
+        val data = WorkManager.getInstance(context.applicationContext).getWorkInfosForUniqueWorkLiveData(MANUAL_WORK)
+        val observer = Observer<List<WorkInfo>> { trySend(it) }
+        data.observeForever(observer)
+        awaitClose { data.removeObserver(observer) }
+    }.flowOn(Dispatchers.Main.immediate)
 
     internal fun connectedNetworkConstraints() = Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED)

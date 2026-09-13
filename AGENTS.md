@@ -156,8 +156,18 @@ under `app/src/debug/res/`.
   `WidgetFailurePolicy`; do not retry all failures indiscriminately.
 - Fixed-location mode needs no location permission. GPS mode supports
   approximate access, optional background access and last-known-location
-  fallback. Preserve bounded location attempts and permission checks.
-- Widget arrows navigate five hours, matching its five visible cards.
+  fallback. Preserve bounded location attempts and permission checks. Resolve
+  GPS place names during refresh with a two-second geocoder wait, preserving
+  coordinates on failure; never geocode in the cached display path.
+  Prefer settlement names across geocoder results before county names. Some UK
+  backends omit locality fields; recover the town from a postcode-bearing
+  formatted UK address, never from arbitrary house/road feature names.
+- Widget layouts show 2, 5 or 8 hours at compact, standard and wide sizes.
+  Use the actual launcher size: five cards fit from 260×90dp, with controls
+  at the top right from 132dp tall. Short layouts hide controls and show Now.
+  Arrows navigate one visible page. Keep all touch targets at least 48dp.
+  Refresh feedback observes WorkManager state; do not persist an unbounded
+  loading boolean that can survive interrupted work.
 - Map catalogs use compatible PNG orders and immutable frames from the newest
   run. Manifest freshness follows 00:00/12:00 UTC boundaries. Preserve cached
   display and warnings when a newer run or the network is unavailable, as well
@@ -199,6 +209,10 @@ download, device or credential limitation; do not claim unrun checks passed.
 Test and lint reports are written under `app/build/reports/`.
 
 ## Change and secret handling
+
+- Treat device-derived locations and personal details from conversations as
+  private. Never include them in public code, test fixtures, screenshots,
+  commits or release notes. Use fictional examples for location regressions.
 
 - Check the working tree before editing and preserve unrelated user changes.
   Keep changes focused, follow nearby Kotlin/Compose formatting, and use

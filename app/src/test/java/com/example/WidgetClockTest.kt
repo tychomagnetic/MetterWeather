@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import io.github.tychomagnetic.metterweather.widget.WidgetClock
+import io.github.tychomagnetic.metterweather.widget.widgetHourCount
 import io.github.tychomagnetic.metterweather.widget.WidgetRefreshManager
 import io.github.tychomagnetic.metterweather.widget.shiftedWidgetOffset
 import org.junit.Assert.*
@@ -16,6 +17,18 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class WidgetClockTest {
+    @Test fun `responsive pages leave at least 48dp for each forecast tile`() {
+        for (width in listOf(180f, 259f, 260f, 300f, 459f, 460f, 600f)) {
+            val count = widgetHourCount(width)
+            val tileWidth = (width - 8f - count * 2f) / count
+            assertTrue(tileWidth >= 48f)
+            assertEquals(count, shiftedWidgetOffset(0, 1, 30, count))
+            assertEquals(0, shiftedWidgetOffset(count, -1, 30, count))
+        }
+        assertEquals(2, widgetHourCount(180f))
+        assertEquals(5, widgetHourCount(260f))
+        assertEquals(8, widgetHourCount(460f))
+    }
     @Test fun `clock uses a non-waking inexact window at the next hour`() {
         val app = ApplicationProvider.getApplicationContext<Application>()
         shadowOf(android.appwidget.AppWidgetManager.getInstance(app)).bindAppWidgetId(1,

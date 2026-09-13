@@ -151,7 +151,7 @@ The app may request:
 - Internet access for forecast and geocoding requests
 - Approximate location access for current-location forecasts; optional precise location access for GPS widget refreshes (approximate access also works)
 - Optional background location access for GPS widget refreshes while the app is closed. Select GPS Location in widget settings, then enable **Allow all the time** in Android's app location permissions. With approximate access only, GPS refreshes use approximate location. Without background access or a fresh fix, the widget tries its last known location. Fixed-location widgets do not need location permission.
-- The widget uses a non-waking, inexact hour-boundary redraw, so Android may defer it while the device sleeps. WorkManager handles automatic network refreshes separately, and the clock redraw uses saved forecasts even when auto-refresh is off. Widget arrows advance or go back five hours, matching the five visible cards.
+- The widget uses a non-waking, inexact hour-boundary redraw, so Android may defer it while the device sleeps. WorkManager handles automatic network refreshes separately, and the clock redraw uses saved forecasts even when auto-refresh is off. Five hourly cards fit from 260×90dp, targeting a 4×1 launcher layout. At 132dp tall or more, controls appear at the top right for a 4×2 layout; shorter widgets always show the current hours without controls. Launcher cell dimensions vary. Narrow and wide layouts show 2 and 8 hours; arrows move one visible page. Cards and controls retain 48dp touch targets. Colours follow the device theme, and refresh shows queued or running feedback.
 
 Location access is optional and is only requested when you choose a current-location feature; locations can also be searched or selected manually.
 
@@ -175,7 +175,7 @@ app/src/main/java/com/example/
 
 ## Data and privacy
 
-Weather data is fetched from the selected provider and location searches use Open-Meteo geocoding. User settings, favourites, selected location, BPF location caches, and widget weather data are stored locally on the device.
+Weather data is fetched from the selected provider and location searches use Open-Meteo geocoding. GPS widget refreshes also use Android's geocoder to resolve coordinates to a place name, allowing up to two seconds for the lookup before continuing with the forecast. Widget hour cards include average wind speed in the selected unit and the direction it comes from; precipitation probabilities of 30% or more appear in blue. User settings, favourites, selected location, BPF location caches, and widget weather data are stored locally on the device.
 
 API credentials are encrypted with the Android Keystore on supported devices. They should still be kept private and must not be committed to source control.
 

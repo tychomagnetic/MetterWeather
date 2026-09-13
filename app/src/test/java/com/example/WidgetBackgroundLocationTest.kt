@@ -18,6 +18,54 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class WidgetBackgroundLocationTest {
+    @Test fun `UK town is recovered when device geocoder only supplies county fields`() {
+        val address = android.location.Address(java.util.Locale.UK).apply {
+            countryCode = "GB"
+            subAdminArea = "Example County"
+            adminArea = "England"
+            featureName = "12"
+            thoroughfare = "Example Road"
+            setAddressLine(0, "12 Example Road, Exampleton AB12 3CD, UK")
+        }
+        assertEquals("Exampleton", WidgetLocationHelper.selectPlaceName(listOf(address)))
+        address.setAddressLine(0, "12 Example Road, Exampleton, AB12 3CD, UK")
+        assertEquals("Exampleton", WidgetLocationHelper.selectPlaceName(listOf(address)))
+        address.setAddressLine(0, "12 Example Road, AB12 3CD, UK")
+        assertEquals("Example County", WidgetLocationHelper.selectPlaceName(listOf(address)))
+        address.setAddressLine(0, "Example Road, AB12 3CD, UK")
+        assertEquals("Example County", WidgetLocationHelper.selectPlaceName(listOf(address)))
+        address.setAddressLine(0, "12 Example Road, Exampleton AB12 3CD, UK")
+        address.countryCode = "US"
+        assertEquals("Example County", WidgetLocationHelper.selectPlaceName(listOf(address)))
+    }
+
+    @Test fun `settlement fields across all results take priority over county and formatted addresses`() {
+        val county = android.location.Address(java.util.Locale.UK).apply {
+            subAdminArea = "Example County"
+            locality = " "
+        }
+        val town = android.location.Address(java.util.Locale.UK).apply { locality = " Exampleton " }
+        assertEquals("Exampleton", WidgetLocationHelper.selectPlaceName(listOf(county, town)))
+        town.subLocality = "Neighbourhood"
+        assertEquals("Neighbourhood", WidgetLocationHelper.selectPlaceName(listOf(county, town)))
+        assertEquals("Example County", WidgetLocationHelper.selectPlaceName(listOf(county)))
+        assertNull(WidgetLocationHelper.selectPlaceName(emptyList()))
+        assertNull(WidgetLocationHelper.selectPlaceName(null))
+    }
+
+    @Test fun `place naming preserves coordinates and survives errors and timeout`() = kotlinx.coroutines.test.runTest {
+        val location = LocationItem.DEFAULT_LOCATIONS.first().copy(name = "Current Location", isCurrentLocation = true)
+        val named = WidgetLocationHelper.withPlaceName(location) { "Exampleton" }
+        assertEquals("Exampleton", named.name)
+        assertEquals(location.latitude, named.latitude, 0.0)
+        assertEquals(location.longitude, named.longitude, 0.0)
+        assertEquals(location, WidgetLocationHelper.withPlaceName(location) { throw java.io.IOException("Offline") })
+        assertEquals(location, WidgetLocationHelper.withPlaceName(location) { kotlinx.coroutines.delay(60_000); "Late name" })
+        try {
+            WidgetLocationHelper.withPlaceName(location) { throw kotlinx.coroutines.CancellationException() }
+            fail("Cancellation must propagate")
+        } catch (_: kotlinx.coroutines.CancellationException) { }
+    }
     @Test fun `background access needs both foreground and background grants`() {
         val app = ApplicationProvider.getApplicationContext<Application>()
         shadowOf(app).denyPermissions(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_BACKGROUND_LOCATION)

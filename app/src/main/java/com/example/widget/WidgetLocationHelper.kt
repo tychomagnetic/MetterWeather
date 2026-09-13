@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.Geocoder
+import android.location.Address
 import android.location.LocationManager
 import android.os.Build
 import android.util.Log
@@ -18,6 +20,100 @@ import kotlinx.coroutines.withTimeoutOrNull
 object WidgetLocationHelper {
 
     private const val TAG = "WidgetLocationHelper"
+    private val legacyGeocoderBusy = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val legacyGeocoderExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+        Thread(task, "widget-geocoder").apply { isDaemon = true }
+    }
+
+    /** Naming is optional: bound the wait, retain coordinates on failure, preserve cancellation. */
+    internal suspend fun withPlaceName(
+        location: LocationItem,
+        lookup: suspend () -> String?
+    ): LocationItem {
+        val name = try {
+            withTimeoutOrNull(2_000L) { lookup() }
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w(TAG, "Place name unavailable; retaining widget coordinates", error)
+            null
+        }
+        return if (name.isNullOrBlank()) location else location.copy(name = name)
+    }
+
+    private suspend fun namedLocation(context: Context, location: LocationItem): LocationItem =
+        if (!location.isCurrentLocation) location else withPlaceName(location) {
+            reverseGeocode(context, location.latitude, location.longitude)
+        }
+
+    private suspend fun reverseGeocode(context: Context, latitude: Double, longitude: Double): String? {
+        if (!Geocoder.isPresent()) return null
+        val geocoder = Geocoder(context, java.util.Locale.getDefault())
+        if (Build.VERSION.SDK_INT >= 33) return suspendCancellableCoroutine { continuation ->
+            geocoder.getFromLocation(latitude, longitude, 5, object : Geocoder.GeocodeListener {
+                override fun onGeocode(addresses: MutableList<Address>) {
+                    if (continuation.isActive) continuation.resume(selectPlaceName(addresses))
+                }
+                override fun onError(errorMessage: String?) {
+                    if (continuation.isActive) continuation.resume(null)
+                }
+            })
+        }
+        // Older Android exposes only a blocking API. Isolate it from the worker's
+        // coroutine so its two-second timeout still returns promptly. Allow at most
+        // one legacy lookup, even if a platform geocoder ignores interruption.
+        if (!legacyGeocoderBusy.compareAndSet(false, true)) return null
+        return suspendCancellableCoroutine { continuation ->
+            legacyGeocoderExecutor.execute {
+                try {
+                    @Suppress("DEPRECATION")
+                    val result = if (continuation.isActive) selectPlaceName(geocoder.getFromLocation(latitude, longitude, 5)) else null
+                    if (continuation.isActive) continuation.resume(result)
+                } catch (error: Exception) {
+                    if (continuation.isActive) continuation.resume(null)
+                } finally {
+                    legacyGeocoderBusy.set(false)
+                }
+            }
+        }
+    }
+
+    /** Search all results for a settlement before accepting a county/region. */
+    internal fun selectPlaceName(addresses: List<Address>?): String? {
+        val results = addresses.orEmpty()
+        fun firstName(field: (Address) -> String?) = results.firstNotNullOfOrNull {
+            field(it)?.trim()?.takeIf(String::isNotEmpty)
+        }
+        return firstName { it.subLocality }
+            ?: firstName { it.locality }
+            ?: firstName { ukPostalTown(it) }
+            ?: firstName { it.subAdminArea }
+            ?: firstName { it.adminArea }
+    }
+
+    private val ukPostcode = Regex("\\b(?:GIR\\s*0AA|[A-Z]{1,2}\\d[A-Z\\d]?\\s*\\d[A-Z]{2})\\b", RegexOption.IGNORE_CASE)
+
+    // Some Android geocoder backends omit locality even though the formatted UK
+    // address contains "Town POSTCODE". Only interpret that specific format;
+    // arbitrary feature names can be house numbers, streets or businesses.
+    private fun ukPostalTown(address: Address): String? {
+        if (!address.countryCode.equals("GB", ignoreCase = true)) return null
+        for (lineIndex in 0..address.maxAddressLineIndex) {
+            val parts = address.getAddressLine(lineIndex).orEmpty().split(',').map(String::trim)
+            for ((index, part) in parts.withIndex()) {
+                val postcode = ukPostcode.find(part) ?: continue
+                if (part.substring(postcode.range.last + 1).isNotBlank()) continue
+                val prefix = part.substring(0, postcode.range.first).trim()
+                val town = prefix.ifEmpty { parts.getOrNull(index - 1).orEmpty() }
+                val excluded = listOf(address.thoroughfare, address.subThoroughfare,
+                    address.premises, address.featureName, address.subAdminArea,
+                    address.adminArea, address.countryName)
+                if (town.isNotBlank() && town.none(Char::isDigit) &&
+                    excluded.none { it?.trim().equals(town, ignoreCase = true) }) return town
+            }
+        }
+        return null
+    }
 
     fun hasBackgroundLocationPermission(context: Context): Boolean =
         hasLocationPermission(context) && (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
@@ -66,14 +162,11 @@ object WidgetLocationHelper {
                     null
                 }
                 if (fix != null) {
-                    // Reverse geocoding can use the network and block for an
-                    // unbounded time on older Android versions. Forecast data is
-                    // more useful than a locality label in a background widget.
-                    return currentLocationItem(fix)
+                    return namedLocation(context, currentLocationItem(fix))
                 }
             }
         }
-        return getWidgetLocation(context, prefs)
+        return getWidgetLocation(context, prefs)?.let { namedLocation(context, it) }
     }
 
     private suspend fun requestCurrentLocation(
