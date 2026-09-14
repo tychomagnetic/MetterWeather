@@ -71,17 +71,50 @@ class WeatherRepositoryFallbackTest {
         assertTrue(report.hourly.all { it.precipitationPeriod != null })
     }
 
-    // London response captured on 2026-09-08 with the production request's
-    // parameters. Metadata removed and year shifted to keep it in the future;
-    // all source timestamps, bounds, axes and values otherwise preserved.
-    private class CapturedBpfApi : MetOfficeBpfApiService {
+    @Test
+    fun `BPF provider daily summary is mapped and survives JSON caching`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.getSharedPreferences("met_office_weather_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+        val prefs = PreferencesManager(context).apply {
+            setForecastSource(ForecastSource.MET_OFFICE_BPF)
+            setBpfApiKey("bpf-test-key")
+        }
+        val api = CapturedBpfApi(includeDailySummary = true)
+        val report = WeatherRepository(prefs, metOfficeBpfApi = api)
+            .getWeatherReport(LocationItem.DEFAULT_LOCATIONS.first()).getOrThrow()
+        val day = report.daily.first { it.date == "2099-09-10" }
+        assertEquals(io.github.tychomagnetic.metterweather.data.model.MetOfficeWeatherCode.LIGHT_RAIN,
+            day.providerDayWeatherCode)
+        assertEquals(day.providerDayWeatherCode, day.dayWeatherCode)
+        val adapter = io.github.tychomagnetic.metterweather.data.remote.ApiServiceProvider.moshi
+            .adapter(io.github.tychomagnetic.metterweather.data.model.WeatherReport::class.java)
+        val restored = adapter.fromJson(adapter.toJson(report))!!
+        assertEquals(day, restored.daily.first { it.date == day.date })
+    }
+
+    // Public sanitized fixture, optionally extended with a fictional daily summary.
+    private class CapturedBpfApi(private val includeDailySummary: Boolean = false) : MetOfficeBpfApiService {
         private fun payload(name: String): Response<ResponseBody> = Response.success(
             checkNotNull(javaClass.getResource("/bpf/$name.json")).readText().toResponseBody()
         )
 
         override suspend fun getUkPercentiles(
             coords: String, parameterNames: String, datetime: String, apiKey: String
-        ) = payload("percentiles")
+        ): Response<ResponseBody> {
+            if (!includeDailySummary) return payload("percentiles")
+            assertTrue(parameterNames.contains("weatherCodeMode1hourPt24h"))
+            assertTrue(parameterNames.contains("weatherCodeMode3hourPt24h"))
+            val json = org.json.JSONObject(checkNotNull(javaClass.getResource("/bpf/percentiles.json")).readText())
+            json.getJSONArray("coverages").put(org.json.JSONObject("""
+                {"domain":{"axes":{
+                  "t":{"values":["2099-09-10T23:00:00Z"],
+                       "bounds":["2099-09-09T23:00:00Z","2099-09-10T23:00:00Z"]},
+                  "percentiles":{"values":[50]}}},
+                 "ranges":{"weatherCodeMode1hourPt24h":{
+                   "axisNames":["percentiles","t"],"shape":[1,1],"values":[12]}}}
+            """.trimIndent()))
+            return Response.success(json.toString().toResponseBody())
+        }
 
         override suspend fun getUkProbabilities(
             coords: String, parameterNames: String, datetime: String, apiKey: String

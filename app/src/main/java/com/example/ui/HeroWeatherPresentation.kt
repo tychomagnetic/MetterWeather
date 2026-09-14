@@ -15,8 +15,9 @@ data class HeroWeatherPresentation(
  * Builds the summary shown above the day selector.
  *
  * Today remains a live observation/forecast for the current hour. Future days use
- * the forecast nearest local noon for coherent temperature, condition and wind
- * values, while precipitation uses the day's peak hourly probability.
+ * the daily headline condition, matching the day selector and detail sheet.
+ * Temperature and wind use the forecast nearest local noon, while precipitation
+ * uses the day's peak hourly probability.
  */
 fun buildHeroWeatherPresentation(
     report: WeatherReport,
@@ -45,7 +46,7 @@ fun buildHeroWeatherPresentation(
             ?: (selectedDay.maxTempCelsius + selectedDay.minTempCelsius) / 2.0,
         feelsLikeCelsius = representativeHour?.feelsLikeCelsius
             ?: (selectedDay.maxTempCelsius + selectedDay.minTempCelsius) / 2.0,
-        weatherCode = representativeHour?.weatherCode ?: selectedDay.dayWeatherCode,
+        weatherCode = selectedDay.dayWeatherCode,
         maxTempCelsius = selectedDay.maxTempCelsius,
         minTempCelsius = selectedDay.minTempCelsius,
         humidityPercent = representativeHour?.humidityPercent ?: report.current.humidityPercent,

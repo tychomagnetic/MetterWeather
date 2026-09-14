@@ -91,6 +91,19 @@ expanded hourly details show its actual local start and end time. A three-hour
 percentage describes the entire interval, not each hour independently. Existing
 BPF caches from the earlier threshold are ignored and refreshed when viewed.
 
+Future daily condition headlines use the provider's daily summary when available.
+The top card, day carousel and detail page share this daily condition. Today's
+top card continues to show the current hour under **Now**.
+BPF rolling 24-hour summaries are used only when they cover exactly one local
+calendar day; they are included in the existing request without an extra API call.
+Otherwise, headlines are derived from daytime hourly conditions. At least three
+wet hourly entries covering a quarter of the available daytime entries give a wet
+headline, with rain, showers and snow counted together before choosing the type.
+An isolated shower does not automatically define the day. Today's headline keeps
+following the remaining daylight forecast, or the remaining night after sunset.
+Older cached forecasts use the improved derivation until their next normal refresh
+adds provider summaries.
+
 ## Running locally
 
 ### Requirements

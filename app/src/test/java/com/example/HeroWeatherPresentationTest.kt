@@ -78,17 +78,37 @@ class HeroWeatherPresentationTest {
     }
 
     @Test
-    fun futureDayUsesLocalNoonConditionsAndDailyPeakRainProbability() {
+    fun futureDayUsesDailyConditionWithLocalNoonTemperatureAndDailyPeakRainProbability() {
         val result = buildHeroWeatherPresentation(report(), selectedDayIndex = 1)
 
         assertEquals("Tomorrow", result.periodLabel)
         assertEquals("Peak rain", result.rainLabel)
         assertEquals(76, result.weather.precipitationChance)
         assertEquals(18.0, result.weather.temperatureCelsius, 0.0)
-        assertEquals(MetOfficeWeatherCode.LIGHT_RAIN, result.weather.weatherCode)
+        assertEquals(MetOfficeWeatherCode.OVERCAST, result.weather.weatherCode)
         assertEquals(24.0, result.weather.maxTempCelsius, 0.0)
         assertEquals(15.0, result.weather.minTempCelsius, 0.0)
         assertEquals(12.0, result.weather.windSpeedMph, 0.0)
+    }
+
+    @Test
+    fun dailyRainSummaryIsNotReplacedByNoonShowers() {
+        val forecast = report().let { original ->
+            original.copy(
+                daily = original.daily.mapIndexed { index, day ->
+                    if (index == 1) day.copy(
+                        dayWeatherCode = MetOfficeWeatherCode.LIGHT_RAIN,
+                        providerDayWeatherCode = MetOfficeWeatherCode.LIGHT_RAIN
+                    ) else day
+                },
+                hourly = original.hourly.map {
+                    it.copy(weatherCode = MetOfficeWeatherCode.LIGHT_RAIN_SHOWER_DAY)
+                }
+            )
+        }
+        val result = buildHeroWeatherPresentation(forecast, selectedDayIndex = 1)
+        assertEquals(forecast.daily[1].dayWeatherCode, result.weather.weatherCode)
+        assertEquals("Light rain", result.weather.weatherCode.description)
     }
 
     private fun report() = WeatherReport(

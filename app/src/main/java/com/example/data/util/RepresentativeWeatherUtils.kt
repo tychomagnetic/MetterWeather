@@ -29,6 +29,9 @@ object RepresentativeWeatherUtils {
         val hourlyByDate = hourly.groupBy { it.date }
 
         return daily.map { day ->
+            if (day.date != today && day.providerDayWeatherCode != null) {
+                return@map day.copy(dayWeatherCode = day.providerDayWeatherCode)
+            }
             val samples = hourlyByDate[day.date].orEmpty()
             if (samples.isEmpty()) return@map day
 
@@ -61,8 +64,12 @@ object RepresentativeWeatherUtils {
     internal fun selectRepresentative(items: List<HourlyForecastItem>): MetOfficeWeatherCode? {
         if (items.isEmpty()) return null
 
+        // Several wet hours matter even when dry weather is more frequent.
+        // Count precipitation together before choosing its specific type.
+        val wet = items.withIndex().filter { it.value.weatherCode.code in 9..30 }
+        val candidates = if (wet.size >= 3 && wet.size * 4 >= items.size) wet else items.withIndex().toList()
         val midpoint = (items.lastIndex) / 2.0
-        val winningFamily = items.withIndex()
+        val winningFamily = candidates
             .groupBy { weatherFamily(it.value.weatherCode) }
             .values
             .maxWithOrNull(

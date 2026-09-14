@@ -187,7 +187,8 @@ data class DailyForecastItem(
     val uvIndex: Int,
     val maxWindGustMph: Double,
     val sunrise: String? = null,
-    val sunset: String? = null
+    val sunset: String? = null,
+    val providerDayWeatherCode: MetOfficeWeatherCode? = null
 )
 
 data class WeatherReport(

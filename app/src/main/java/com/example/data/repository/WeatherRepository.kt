@@ -1030,6 +1030,8 @@ class WeatherRepository(
             "visibilityInAir1p5m",
             "weatherCodePt01h",
             "weatherCodePt03h",
+            "weatherCodeMode1hourPt24h",
+            "weatherCodeMode3hourPt24h",
             "ultravioletIndex"
         ).joinToString(",")
 
@@ -1429,6 +1431,13 @@ class WeatherRepository(
             if (index == currentHourlyIndex) item.copy(timeLabel = "Now", isNow = true) else item
         }
 
+        // Optional summaries use the existing percentile request. Missing or
+        // misaligned summaries leave the local derivation available.
+        val providerDailyCodes = io.github.tychomagnetic.metterweather.data.util.BpfDailyWeatherUtils.select(
+            bpfIntervalSeries(percentileCollection, "weatherCodeMode3hourPt24h", 24) +
+                bpfIntervalSeries(percentileCollection, "weatherCodeMode1hourPt24h", 24),
+            location
+        )
         val daily = markedHourly
             .groupBy { it.date }
             .toSortedMap()
@@ -1461,7 +1470,8 @@ class WeatherRepository(
                     uvIndex = items.maxOf { it.uvIndex },
                     maxWindGustMph = maxWindGustMph,
                     sunrise = sunTimes.first,
-                    sunset = sunTimes.second
+                    sunset = sunTimes.second,
+                    providerDayWeatherCode = providerDailyCodes[date]
                 )
             }
 
@@ -1924,7 +1934,9 @@ class WeatherRepository(
             uvIndex = item.middayUvIndex ?: 3,
             maxWindGustMph = maxGustMph,
             sunrise = sunTimes.first,
-            sunset = sunTimes.second
+            sunset = sunTimes.second,
+            providerDayWeatherCode = item.daySignificantWeatherCode?.takeIf { it in 0..30 }
+                ?.let { MetOfficeWeatherCode.fromCode(it) }
         )
     }
 
@@ -2108,7 +2120,8 @@ class WeatherRepository(
                     uvIndex = daily.uvIndexMax.orEmpty()[i].roundToInt().coerceAtLeast(0),
                     maxWindGustMph = daily.windGusts10mMax.orEmpty()[i],
                     sunrise = daily.sunrise.orEmpty()[i].takeLast(5),
-                    sunset = daily.sunset.orEmpty()[i].takeLast(5)
+                    sunset = daily.sunset.orEmpty()[i].takeLast(5),
+                    providerDayWeatherCode = dayCode
                 )
             )
         }
