@@ -35,6 +35,44 @@ class WeatherClockUtilsTest {
         assertEquals("Today", update.report.daily[1].dayOfWeek)
     }
 
+    @Test
+    fun `report replacement keeps selected calendar date when first day rolls off`() {
+        val previous = report(
+            listOf(
+                hour("2026-01-01T23:00:00Z", "2026-01-01", 4.0),
+                hour("2026-01-02T00:00:00Z", "2026-01-02", 7.0, isNow = true)
+            )
+        )
+        val replacement = report(
+            listOf(
+                hour("2026-01-02T00:00:00Z", "2026-01-02", 7.0, isNow = true),
+                hour("2026-01-03T00:00:00Z", "2026-01-03", 6.0)
+            )
+        )
+
+        val selectedDayIndex = WeatherClockUtils.selectedDayIndexAfterReplacement(
+            previousReport = previous,
+            selectedDayIndex = 1,
+            replacementReport = replacement
+        )
+
+        assertEquals(0, selectedDayIndex)
+    }
+
+    @Test
+    fun `report replacement falls back to first day when selected date is unavailable`() {
+        val previous = report(listOf(hour("2026-01-01T23:00:00Z", "2026-01-01", 4.0)))
+        val replacement = report(listOf(hour("2026-01-02T00:00:00Z", "2026-01-02", 7.0, isNow = true)))
+
+        val selectedDayIndex = WeatherClockUtils.selectedDayIndexAfterReplacement(
+            previousReport = previous,
+            selectedDayIndex = 0,
+            replacementReport = replacement
+        )
+
+        assertEquals(0, selectedDayIndex)
+    }
+
     private fun hour(time: String, date: String, temperature: Double, isNow: Boolean = false) =
         HourlyForecastItem(
             timeLabel = if (isNow) "Now" else "12 AM",
@@ -53,7 +91,7 @@ class WeatherClockUtilsTest {
 
     private fun report(hours: List<HourlyForecastItem>): WeatherReport {
         val location = LocationItem.DEFAULT_LOCATIONS.first().copy(timezone = "Europe/London")
-        val daily = listOf("2026-01-01", "2026-01-02").map { date ->
+        val daily = hours.map { it.date }.distinct().map { date ->
             DailyForecastItem(
                 date = date,
                 dayOfWeek = "",

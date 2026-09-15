@@ -92,7 +92,7 @@ class WeatherRepositoryFallbackTest {
         assertEquals(day, restored.daily.first { it.date == day.date })
     }
 
-    // Public sanitized fixture, optionally extended with a fictional daily summary.
+    // Synthetic fixture, optionally extended with a fictional daily summary.
     private class CapturedBpfApi(private val includeDailySummary: Boolean = false) : MetOfficeBpfApiService {
         private fun payload(name: String): Response<ResponseBody> = Response.success(
             checkNotNull(javaClass.getResource("/bpf/$name.json")).readText().toResponseBody()

@@ -73,22 +73,26 @@ class HeroWeatherPresentationTest {
 
         assertEquals("Now", result.periodLabel)
         assertEquals("Rain now", result.rainLabel)
+        assertEquals(false, result.isDailySummary)
+        assertEquals(true, result.hasWindDirection)
         assertEquals(8, result.weather.precipitationChance)
         assertEquals(current, result.weather)
     }
 
     @Test
-    fun futureDayUsesDailyConditionWithLocalNoonTemperatureAndDailyPeakRainProbability() {
+    fun futureDayUsesDailyRangeConditionPeakRainAndStrongestWind() {
         val result = buildHeroWeatherPresentation(report(), selectedDayIndex = 1)
 
         assertEquals("Tomorrow", result.periodLabel)
         assertEquals("Peak rain", result.rainLabel)
+        assertEquals(true, result.isDailySummary)
+        assertEquals(true, result.hasWindDirection)
         assertEquals(76, result.weather.precipitationChance)
-        assertEquals(18.0, result.weather.temperatureCelsius, 0.0)
         assertEquals(MetOfficeWeatherCode.OVERCAST, result.weather.weatherCode)
         assertEquals(24.0, result.weather.maxTempCelsius, 0.0)
         assertEquals(15.0, result.weather.minTempCelsius, 0.0)
-        assertEquals(12.0, result.weather.windSpeedMph, 0.0)
+        assertEquals(14.0, result.weather.windSpeedMph, 0.0)
+        assertEquals(240, result.weather.windDirectionDegrees)
     }
 
     @Test
@@ -109,6 +113,17 @@ class HeroWeatherPresentationTest {
         val result = buildHeroWeatherPresentation(forecast, selectedDayIndex = 1)
         assertEquals(forecast.daily[1].dayWeatherCode, result.weather.weatherCode)
         assertEquals("Light rain", result.weather.weatherCode.description)
+    }
+
+    @Test
+    fun futureDayWithoutHourlyCoverageDoesNotInventMaxWindDirection() {
+        val result = buildHeroWeatherPresentation(
+            report = report().copy(hourly = emptyList()),
+            selectedDayIndex = 1
+        )
+
+        assertEquals(22.0, result.weather.windSpeedMph, 0.0)
+        assertEquals(false, result.hasWindDirection)
     }
 
     private fun report() = WeatherReport(

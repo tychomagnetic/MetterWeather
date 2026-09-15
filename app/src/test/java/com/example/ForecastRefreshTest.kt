@@ -20,31 +20,75 @@ import java.io.IOException
 @Config(sdk = [36])
 class ForecastRefreshTest {
     private val location = LocationItem.DEFAULT_LOCATIONS.first()
-    private fun report(source: WeatherDataSource) = WeatherReport(
+    private fun report(source: WeatherDataSource, fetchedAtMillis: Long = 1_000_000L) = WeatherReport(
         location, CurrentWeather(18.0, 17.0, MetOfficeWeatherCode.CLOUDY, 20.0, 12.0,
             70, 8.0, 12.0, 180, 30, 2, 20_000, 1012.0, "2026-08-16T12:00:00Z", false),
-        emptyList(), emptyList(), source, fetchedAtMillis = 1_000_000L
+        emptyList(), emptyList(), source, fetchedAtMillis = fetchedAtMillis
     )
 
-    @Test fun `startup restores old Spot and Open Meteo reports while refresh runs`() {
+    @Test fun `startup reuses fresh cached forecast for every source without refreshing`() {
         val app = ApplicationProvider.getApplicationContext<Application>()
+        val fetchedAtMillis = System.currentTimeMillis() - 30L * 60L * 1000L
         for ((source, dataSource) in listOf(
             ForecastSource.MET_OFFICE_SPOT to WeatherDataSource.MET_OFFICE_DATAHUB,
+            ForecastSource.MET_OFFICE_BPF to WeatherDataSource.MET_OFFICE_BPF,
             ForecastSource.OPEN_METEO to WeatherDataSource.OPEN_METEO_METEOROLOGICAL
         )) {
             app.getSharedPreferences("met_office_weather_prefs", Context.MODE_PRIVATE).edit().clear().commit()
-            val saved = report(dataSource)
-            PreferencesManager(app).apply {
-                setForecastSource(source)
-                setSelectedLocation(location)
-                setCachedWeatherReport(saved)
-            }
+            val saved = report(dataSource, fetchedAtMillis)
+            seedForecastCache(app, source, saved)
             val viewModel = WeatherViewModel(app)
             val store = ViewModelStore().apply { put("weather", viewModel) }
             try {
                 assertEquals(saved.fetchedAtMillis, viewModel.uiState.value.weatherReport?.fetchedAtMillis)
                 assertEquals(dataSource, viewModel.uiState.value.weatherReport?.dataSource)
                 assertFalse(viewModel.uiState.value.isLoading)
+                assertFalse(viewModel.uiState.value.isRefreshing)
+            } finally { store.clear() }
+        }
+    }
+
+    @Test fun `startup restores stale cached forecast for every source while refresh runs`() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val fetchedAtMillis = System.currentTimeMillis() - 3L * 60L * 60L * 1000L
+        for ((source, dataSource) in listOf(
+            ForecastSource.MET_OFFICE_SPOT to WeatherDataSource.MET_OFFICE_DATAHUB,
+            ForecastSource.MET_OFFICE_BPF to WeatherDataSource.MET_OFFICE_BPF,
+            ForecastSource.OPEN_METEO to WeatherDataSource.OPEN_METEO_METEOROLOGICAL
+        )) {
+            app.getSharedPreferences("met_office_weather_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+            val saved = report(dataSource, fetchedAtMillis)
+            seedForecastCache(app, source, saved)
+            val viewModel = WeatherViewModel(app)
+            val store = ViewModelStore().apply { put("weather", viewModel) }
+            try {
+                assertEquals(saved.fetchedAtMillis, viewModel.uiState.value.weatherReport?.fetchedAtMillis)
+                assertEquals(dataSource, viewModel.uiState.value.weatherReport?.dataSource)
+                assertFalse(viewModel.uiState.value.isLoading)
+                assertTrue(viewModel.uiState.value.isRefreshing)
+            } finally { store.clear() }
+        }
+    }
+
+    @Test fun `manual refresh bypasses fresh cache for every source`() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val fetchedAtMillis = System.currentTimeMillis() - 30L * 60L * 1000L
+        for ((source, dataSource) in listOf(
+            ForecastSource.MET_OFFICE_SPOT to WeatherDataSource.MET_OFFICE_DATAHUB,
+            ForecastSource.MET_OFFICE_BPF to WeatherDataSource.MET_OFFICE_BPF,
+            ForecastSource.OPEN_METEO to WeatherDataSource.OPEN_METEO_METEOROLOGICAL
+        )) {
+            app.getSharedPreferences("met_office_weather_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+            val saved = report(dataSource, fetchedAtMillis)
+            seedForecastCache(app, source, saved)
+            val viewModel = WeatherViewModel(app)
+            val store = ViewModelStore().apply { put("weather", viewModel) }
+            try {
+                assertFalse(viewModel.uiState.value.isRefreshing)
+
+                viewModel.loadWeather(isRefresh = true)
+
+                assertEquals(saved.fetchedAtMillis, viewModel.uiState.value.weatherReport?.fetchedAtMillis)
                 assertTrue(viewModel.uiState.value.isRefreshing)
             } finally { store.clear() }
         }
@@ -85,5 +129,21 @@ class ForecastRefreshTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
         assertFalse(WidgetRefreshManager.hasInstalledWidgets(app))
         assertEquals(WidgetRefreshOutcome.SKIPPED, WidgetRefreshManager.performWidgetRefresh(app))
+    }
+
+    private fun seedForecastCache(
+        app: Application,
+        source: ForecastSource,
+        saved: WeatherReport
+    ) {
+        PreferencesManager(app).apply {
+            setForecastSource(source)
+            setSelectedLocation(location)
+            if (source == ForecastSource.MET_OFFICE_BPF) {
+                setCachedBpfWeatherReport(saved)
+            } else {
+                setCachedWeatherReport(saved)
+            }
+        }
     }
 }

@@ -64,4 +64,16 @@ object WeatherClockUtils {
             nextSelectedDay
         )
     }
+
+    fun selectedDayIndexAfterReplacement(
+        previousReport: WeatherReport?,
+        selectedDayIndex: Int,
+        replacementReport: WeatherReport
+    ): Int {
+        val selectedDate = previousReport?.daily?.getOrNull(selectedDayIndex)?.date
+            ?: return 0
+        return replacementReport.daily.indexOfFirst { it.date == selectedDate }
+            .takeIf { it >= 0 }
+            ?: 0
+    }
 }

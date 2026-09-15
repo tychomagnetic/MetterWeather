@@ -232,6 +232,8 @@ fun WeatherScreen(
                             current = heroPresentation.weather,
                             periodLabel = heroPresentation.periodLabel,
                             rainLabel = heroPresentation.rainLabel,
+                            isDailySummary = heroPresentation.isDailySummary,
+                            showWindDirection = heroPresentation.hasWindDirection,
                             tempUnit = uiState.tempUnit,
                             windUnit = uiState.windUnit
                         )

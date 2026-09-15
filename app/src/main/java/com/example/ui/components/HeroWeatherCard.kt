@@ -43,6 +43,8 @@ fun HeroWeatherCard(
     current: CurrentWeather,
     periodLabel: String = "Now",
     rainLabel: String = "Rain now",
+    isDailySummary: Boolean = false,
+    showWindDirection: Boolean = true,
     tempUnit: TemperatureUnit,
     windUnit: WindSpeedUnit,
     modifier: Modifier = Modifier
@@ -97,52 +99,70 @@ fun HeroWeatherCard(
                             ),
                             maxLines = 1
                         )
-                        Text(
-                            text = "Feels like ${tempUnit.format(current.feelsLikeCelsius)}",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = BentoHeroText.copy(alpha = 0.8f),
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp
+                        if (!isDailySummary) {
+                            Text(
+                                text = "Feels like ${tempUnit.format(current.feelsLikeCelsius)}",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = BentoHeroText.copy(alpha = 0.8f),
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 12.sp
+                                )
                             )
-                        )
+                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Right: Compact Main Temperature & High/Low
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        text = "${tempUnit.convert(current.temperatureCelsius).toInt()}°",
-                        style = MaterialTheme.typography.displayMedium.copy(
-                            fontSize = 44.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = BentoHeroText,
-                            letterSpacing = (-1).sp
-                        )
-                    )
+                if (isDailySummary) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        DailyTemperature(
+                            label = "HIGH",
+                            temperature = current.maxTempCelsius,
+                            tempUnit = tempUnit
+                        )
+                        DailyTemperature(
+                            label = "LOW",
+                            temperature = current.minTempCelsius,
+                            tempUnit = tempUnit,
+                            subdued = true
+                        )
+                    }
+                } else {
+                    Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = "H:${tempUnit.convert(current.maxTempCelsius).toInt()}°",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                color = BentoHeroText.copy(alpha = 0.9f),
-                                fontSize = 11.sp
+                            text = "${tempUnit.convert(current.temperatureCelsius).toInt()}°",
+                            style = MaterialTheme.typography.displayMedium.copy(
+                                fontSize = 44.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = BentoHeroText,
+                                letterSpacing = (-1).sp
                             )
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "L:${tempUnit.convert(current.minTempCelsius).toInt()}°",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                color = BentoHeroText.copy(alpha = 0.75f),
-                                fontSize = 11.sp
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "H:${tempUnit.convert(current.maxTempCelsius).toInt()}°",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = BentoHeroText.copy(alpha = 0.9f),
+                                    fontSize = 11.sp
+                                )
                             )
-                        )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "L:${tempUnit.convert(current.minTempCelsius).toInt()}°",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = BentoHeroText.copy(alpha = 0.75f),
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -200,7 +220,11 @@ fun HeroWeatherCard(
                     )
                     Spacer(modifier = Modifier.width(5.dp))
                     Text(
-                        text = "${windUnit.format(current.windSpeedMph)} ${current.windDirectionCompass}",
+                        text = buildString {
+                            if (isDailySummary) append("Max ")
+                            append(windUnit.format(current.windSpeedMph))
+                            if (showWindDirection) append(" ${current.windDirectionCompass}")
+                        },
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.SemiBold,
                             color = BentoHeroText,
@@ -210,5 +234,34 @@ fun HeroWeatherCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DailyTemperature(
+    label: String,
+    temperature: Double,
+    tempUnit: TemperatureUnit,
+    subdued: Boolean = false
+) {
+    Column(horizontalAlignment = Alignment.End) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                color = BentoHeroText.copy(alpha = if (subdued) 0.65f else 0.8f),
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp,
+                letterSpacing = 0.5.sp
+            )
+        )
+        Text(
+            text = "${tempUnit.convert(temperature).toInt()}°",
+            style = MaterialTheme.typography.displaySmall.copy(
+                fontSize = 32.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = BentoHeroText.copy(alpha = if (subdued) 0.82f else 1f),
+                letterSpacing = (-0.5).sp
+            )
+        )
     }
 }

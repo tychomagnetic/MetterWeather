@@ -44,13 +44,13 @@ class BpfPrecipitationTest {
         assertEquals(3, result.size)
     }
 
-    @Test fun `captured multi threshold response uses the measured precipitation axes`() {
+    @Test fun `synthetic multi threshold response uses the configured precipitation axes`() {
         val collection = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
             .adapter(BpfCoverageCollection::class.java)
             .fromJson(checkNotNull(javaClass.getResource("/bpf/probabilities.json")).readText())!!
-        assertEquals(0.9501953, BpfPrecipitationUtils.read(collection, 1)
+        assertEquals(0.42, BpfPrecipitationUtils.read(collection, 1)
             .getValue("2099-09-08T14:00:00Z").value, 0.0000001)
-        assertEquals(0.9501953, BpfPrecipitationUtils.read(collection, 3)
+        assertEquals(0.63, BpfPrecipitationUtils.read(collection, 3)
             .getValue("2099-09-08T12:00:00Z").value, 0.0000001)
     }
 

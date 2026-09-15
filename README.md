@@ -67,6 +67,8 @@ At the time of writing, the Global Spot free plan allows up to 360 calls per day
 
 The official [BPF API user guide](https://datahub.metoffice.gov.uk/docs/f/category/site-specific/type/probabilistic-forecast-feature/api-user-guide) describes the probabilistic service and its parameters. The app requests only the data it needs and combines the median percentile forecast with precipitation probabilities and weather-type information.
 
+For every foreground forecast source, a matching forecast for the selected location is reused for up to two hours instead of being downloaded automatically again. A manual refresh deliberately bypasses this window and requests new data.
+
 The free BPF allowance is currently much tighter than Spot (listed by the Met Office as up to 55 calls per day). To conserve it:
 
 - A new BPF forecast normally uses two API calls: one percentile request and one probability request.
@@ -74,7 +76,6 @@ The free BPF allowance is currently much tighter than Spot (listed by the Met Of
 - BPF results are cached separately for each location for two hours.
 - The eight most recently fetched BPF locations are retained; older location caches are removed automatically.
 - Switching back to a recently viewed location reuses its fresh cache rather than calling the API again.
-- A manual refresh deliberately bypasses the cache and makes a new request.
 - Merely starting the app does not refresh every saved location.
 - The widget never calls BPF; it refreshes from Global Spot on the hour and maintains a separate widget cache.
 

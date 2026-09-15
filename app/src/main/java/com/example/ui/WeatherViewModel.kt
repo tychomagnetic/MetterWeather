@@ -197,7 +197,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             val retryAllowed = nowMillis - lastAutomaticRefreshAttemptMillis >= automaticRefreshRetryMillis
             if (stale && retryAllowed && weatherLoadJob?.isActive != true) {
                 lastAutomaticRefreshAttemptMillis = nowMillis
-                loadWeather(currentState.selectedLocation, isRefresh = true, useFreshBpfCache = false)
+                loadWeather(currentState.selectedLocation, isRefresh = true, useFreshCache = false)
             }
         } else {
             _uiState.update { it.copy(clockTickMillis = nowMillis) }
@@ -207,7 +207,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     fun loadWeather(
         location: LocationItem = _uiState.value.selectedLocation,
         isRefresh: Boolean = false,
-        useFreshBpfCache: Boolean = !isRefresh
+        useFreshCache: Boolean = !isRefresh
     ) {
         weatherLoadJob?.cancel()
         weatherLoadJob = viewModelScope.launch {
@@ -221,20 +221,28 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                     matchesForecast(it, updatedLocation, requestedSource)
                 }
                 if (cachedReport != null) {
-                    _uiState.update {
-                        it.copy(
-                            weatherReport = cachedReport.copy(location = updatedLocation),
-                            selectedLocation = updatedLocation,
-                            isLoading = false,
-                            isRefreshing = true,
-                            errorMessage = null
-                        )
+                    val cachedAgeMillis = System.currentTimeMillis() - cachedReport.fetchedAtMillis
+                    if (useFreshCache && cachedAgeMillis in 0..automaticRefreshMaxAgeMillis) {
+                        applyWeatherReport(cachedReport.copy(location = updatedLocation), updatedLocation)
+                        return@launch
                     }
-                    cachedReportDisplayed = true
+
+                    if (cachedAgeMillis in 0..refreshDisplayMaxAgeMillis) {
+                        _uiState.update {
+                            it.copy(
+                                weatherReport = cachedReport.copy(location = updatedLocation),
+                                selectedLocation = updatedLocation,
+                                isLoading = false,
+                                isRefreshing = true,
+                                errorMessage = null
+                            )
+                        }
+                        cachedReportDisplayed = true
+                    }
                 }
             }
 
-            if (useFreshBpfCache && requestedSource == ForecastSource.MET_OFFICE_BPF) {
+            if (useFreshCache && requestedSource == ForecastSource.MET_OFFICE_BPF) {
                 val cachedReport = preferencesManager.getCachedBpfWeatherReport(updatedLocation)
                 if (cachedReport != null) {
                     val cachedAgeMillis = System.currentTimeMillis() - cachedReport.fetchedAtMillis
@@ -359,10 +367,16 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun applyWeatherReport(report: WeatherReport, location: LocationItem) {
-        _uiState.update {
-            it.copy(
+        _uiState.update { currentState ->
+            val replacementSelectedDayIndex = WeatherClockUtils.selectedDayIndexAfterReplacement(
+                previousReport = currentState.weatherReport,
+                selectedDayIndex = currentState.selectedDayIndex,
+                replacementReport = report
+            )
+            currentState.copy(
                 weatherReport = report,
                 selectedLocation = location,
+                selectedDayIndex = replacementSelectedDayIndex,
                 isLoading = false,
                 isRefreshing = false,
                 errorMessage = null
@@ -601,7 +615,7 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
         loadWeather(
             _uiState.value.selectedLocation,
             isRefresh = true,
-            useFreshBpfCache = source == ForecastSource.MET_OFFICE_BPF
+            useFreshCache = true
         )
     }
 
